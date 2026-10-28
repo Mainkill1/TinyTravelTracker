@@ -3,6 +3,15 @@ package com.rareventure.gps2;
 import android.content.Context;
 
 public class GTG {
+  public enum Requirement {
+    PREFS_LOADED;
+    public boolean fulfilled;
+
+    public boolean isFulfilled() {
+      return fulfilled;
+    }
+  }
+
   public static class Preferences {
     public boolean isCollectData;
   }

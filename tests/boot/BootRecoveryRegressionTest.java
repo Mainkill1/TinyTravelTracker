@@ -14,6 +14,7 @@ public class BootRecoveryRegressionTest {
     Context c = new Context();
     c.persistedCollectData = saved;
     GTG.prefs.isCollectData = stale;
+    GTG.Requirement.PREFS_LOADED.fulfilled = false;
     ContextCompat.starts = 0;
     return c;
   }
@@ -77,8 +78,20 @@ public class BootRecoveryRegressionTest {
     context = state(true, false);
     new GpsTrailerReceiver().onReceive(context, new Intent(GpsTrailerReceiver.class.getName()));
     check(ContextCompat.starts == 1, "Existing named recovery broadcast continues to work");
+    context = state(true, false);
+    GTG.Requirement.PREFS_LOADED.fulfilled = true;
+    new GpsTrailerReceiver().onReceive(context, new Intent(context, GpsTrailerReceiver.class));
+    check(
+        ContextCompat.starts == 0 && !GTG.prefs.isCollectData,
+        "Live disabled collection must win over an older saved enabled preference");
+    context = state(false, true);
+    GTG.Requirement.PREFS_LOADED.fulfilled = true;
+    new GpsTrailerReceiver().onReceive(context, new Intent(context, GpsTrailerReceiver.class));
+    check(
+        ContextCompat.starts == 1 && GTG.prefs.isCollectData,
+        "Live enabled collection must not be overwritten by an older saved disabled preference");
     System.out.println(
-        "PASS: real GpsTrailerReceiver boot/alarm decisions (6 scenarios), manifest boot"
+        "PASS: real GpsTrailerReceiver boot/alarm decisions (8 scenarios), manifest boot"
             + " registration");
   }
 }

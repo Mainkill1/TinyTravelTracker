@@ -34,10 +34,10 @@ public class GpsTrailerReceiver extends BroadcastReceiver
 	public void onReceive(Context context, Intent intent) {
 		Log.d("GTG", "GpsTrailerReceiver called");
 
-		// Read persisted state: boot may create a fresh process, and an alarm may
-		// arrive after collection was disabled. Do not start a foreground service
-		// just to have it stop itself when recording is off.
-		GTG.prefSet.loadAndroidPreferencesFromSharedPrefs(context);
+		// Boot may create a fresh process. Once preferences are loaded, preserve
+		// live UI changes that may still be waiting for their background save.
+		if (!GTG.Requirement.PREFS_LOADED.isFulfilled())
+			GTG.prefSet.loadAndroidPreferencesFromSharedPrefs(context);
 		if (!GTG.prefs.isCollectData)
 			return;
 
