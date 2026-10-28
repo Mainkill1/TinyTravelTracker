@@ -34,6 +34,14 @@ The Android build uses Gradle 8.11.1 / Android Gradle Plugin 8.10.1, JDK 17, SDK
 
 Changelog: (you can monitor the latest build here: https://f-droid.org/wiki/index.php?title=com.rareventure.gps2/lastbuild&redirect=no)
 
+V 1.1.49-alpha.3 (build 94) - 2026 Oct 28
+
+Android 16 target and AndroidX migration; explicit GPS provider registration and
+foreground location service support; registration/last-fix diagnostics; document
+picker backups with validation before restoring history; source-rebuilt map
+libraries with 16 KB native layout checks. OnePlus 15 physical GPS confirmation
+remains outstanding. See BUILDING.md for verification scope and runtime limits.
+
 V 1.1.48 (build 91) - 2019 Sep 10
 
 Attempt to fix #83, where Oreo and later Android versions kill the gps recording service.
