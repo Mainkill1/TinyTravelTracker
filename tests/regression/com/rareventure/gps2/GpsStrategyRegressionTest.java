@@ -106,7 +106,7 @@ public class GpsStrategyRegressionTest {
         SystemClock.now += 31 * 60 * 1000L;
         int beforeWake = f.reader.calls;
         f.strategy.notifyWoken();
-        await(() -> f.reader.calls > beforeWake);
+        await(() -> f.reader.calls > beforeWake && f.thread.getState() == Thread.State.TIMED_WAITING);
         synchronized (f.strategy) {
             long nextEvent = (Long) field(f.strategy, "nextSignificantEvent");
             check(nextEvent - SystemClock.now >= 15000,
