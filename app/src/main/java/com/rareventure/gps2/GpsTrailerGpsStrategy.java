@@ -157,6 +157,7 @@ public class GpsTrailerGpsStrategy {
 	}
 	
 	private void writeUpdateStatus() {
+		if (os == null && !DebugLogFile.isEnabled()) return;
 		
 		synchronized(TestUtil.class)
 		{
