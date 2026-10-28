@@ -180,7 +180,9 @@
     <string name="write_to_gps_wake_lock_log_summary">Write wake lock calls to \"%s\" for debugging purposes</string>
     <string name="gps_wake_lock_filename">/sdcard/ttt_wake_lock_debug.txt</string>
     <string name="conclusion_help_menu_tip"><![CDATA[If you would like to view the manual, on the following screen, press <img src="1"/> (or <img src="2"/> on older phones) and select "Help".]]></string>
-    <string name="service_gps_must_grant_permission">Permission to use GPS has not been granted.</string>
+    <string name="service_gps_must_grant_permission">Precise location permission is required to record GPS points. Enable location permission and Use precise location in Android Settings for Tiny Travel Tracker.</string>
+    <string name="location_permission_approximate">Only approximate location is allowed. Tiny Travel Tracker requires precise location to record GPS points. In Android Settings, open Apps, Tiny Travel Tracker, Permissions, Location, and enable Use precise location. Recording will resume when you return to the app.</string>
+    <string name="location_permission_denied">Location permission was denied. Tiny Travel Tracker requires precise location to record GPS points. In Android Settings, open Apps, Tiny Travel Tracker, Permissions, and allow Location. If available, enable Use precise location, then return to the app.</string>
     <string name="button_prev">Prev</string>
     <string name="button_next">Next</string>
     <string name="report_problem_question">If a problem occurs, Tiny Travel Tracker may optionally send an anonymous report about the issue to the developer. Would you like to enable this?</string>

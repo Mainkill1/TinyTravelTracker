@@ -33,6 +33,7 @@ import com.rareventure.gps2.reviewer.wizard.WelcomePage;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
@@ -113,32 +114,49 @@ public class GTGActivityHelper {
 		neededRequirements = (neededRequirements | i.getIntExtra(INTENT_REQUIREMENTS_BITMAP, 0));
 	}
 
-	/**
-	 * Asks the user to let us use the gps, just like in the old Windows XP days.
-	 * Allow or deny, user? What's it going to be?
-	 */
+	/** GPS_PROVIDER recording requires precise location, even when coarse is granted. */
 	private void getGpsAllowOrDeny() {
-		if(GTG.userDoesntWantUsToHaveGpsPerm)
+		if (Nammu.hasPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION)) {
+			// A user may have enabled precise location in Settings after refusing it here.
+			if (GTG.userDoesntWantUsToHaveGpsPerm)
+				onGpsPermissionResult();
+			return;
+		}
+		if (GTG.userDoesntWantUsToHaveGpsPerm)
 			return;
 
-		if(!Nammu.hasPermission(activity,Manifest.permission.ACCESS_FINE_LOCATION)) {
-			Nammu.askForPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION,
-					new PermissionCallback() {
+		Nammu.askForPermission(activity, new String[] {
+				Manifest.permission.ACCESS_FINE_LOCATION,
+				Manifest.permission.ACCESS_COARSE_LOCATION
+		}, new PermissionCallback() {
+			@Override
+			public void permissionGranted() {
+				onGpsPermissionResult();
+			}
 
-						@Override
-						public void permissionGranted() {
-//							Log.d(GTG.TAG,"Am i being called???? permissionGranted");
-							GTG.alert(GTG.GTGEvent.ERROR_GPS_NO_PERMISSION, false);
-							ContextCompat.startForegroundService(activity,new Intent(activity,
-									GpsTrailerService.class));
-						}
+			@Override
+			public void permissionRefused() {
+				onGpsPermissionResult();
+			}
+		});
+	}
 
-						@Override
-						public void permissionRefused() {
-							GTG.userDoesntWantUsToHaveGpsPerm = true;
-						}
-					});
+	private void onGpsPermissionResult() {
+		// Check the actual grant rather than treating a partial grant as total denial.
+		boolean precise = Nammu.hasPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION);
+		GTG.userDoesntWantUsToHaveGpsPerm = !precise;
+		GTG.alert(GTG.GTGEvent.ERROR_GPS_NO_PERMISSION, !precise);
+		if (precise) {
+			ContextCompat.startForegroundService(activity, new Intent(activity, GpsTrailerService.class));
+			return;
 		}
+
+		boolean approximate = Nammu.hasPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION);
+		new AlertDialog.Builder(activity)
+				.setMessage(approximate ? R.string.location_permission_approximate
+						: R.string.location_permission_denied)
+				.setPositiveButton(android.R.string.ok, null)
+				.show();
 	}
 
 	//co: this was used for appcompat v 27. It didn't work, so I'm downgrading back to
