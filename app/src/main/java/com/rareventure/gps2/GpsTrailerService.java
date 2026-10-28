@@ -27,10 +27,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.app.job.JobInfo;
-import android.app.job.JobScheduler;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -134,6 +131,10 @@ public class GpsTrailerService extends Service {
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
+		if (!CollectorServicePolicy.isCollectionEnabled(this)) {
+			stopSelf();
+			return Service.START_NOT_STICKY;
+		}
 		/* ttt_installer:remove_line */Log.d(GTG.TAG, "Starting on intent " + intent);
 		//if we were already running and had a gpsManager, notify that we woke up
 		if (gpsManager != null)
@@ -361,11 +362,9 @@ public class GpsTrailerService extends Service {
 		//read isCollectData first from shared prefs and if its false, quit immediately
 		//we don't want to notify the user that we ran for any reason if this is false
 		// (for example the db was corrupted)
-		GTG.prefSet.loadAndroidPreferencesFromSharedPrefs(this);
-
 		//co: we initially don't want to do anything if the user is unlicensed,
 		// just find out how much piracy is a problem
-		if (!GTG.prefs.isCollectData ) //|| GTGEvent.ERROR_UNLICENSED.isOn)
+		if (!CollectorServicePolicy.isCollectionEnabled(this)) //|| GTGEvent.ERROR_UNLICENSED.isOn)
 		{
 			turnOffNotification();
 			stopSelf();
@@ -471,15 +470,7 @@ public class GpsTrailerService extends Service {
 			registerReceiver(batteryReceiver, batteryLevelFilter);
 
 
-			//hack to try and keep our service from shutting down and never restarting
-			JobScheduler jobScheduler = (JobScheduler)getApplicationContext()
-					.getSystemService(JOB_SCHEDULER_SERVICE);
-			ComponentName componentName = new ComponentName(this,
-					JobSchedulerRestarterService.class);
-
-			JobInfo jobInfoObj = new JobInfo.Builder(1, componentName)
-					.setPeriodic(15 * 60 * 1000L).setPersisted(true).build();
-			jobScheduler.schedule(jobInfoObj);
+			CollectorServicePolicy.scheduleRestartJob(this);
 		}
 		catch (Exception e) {
 			shutdownWithException(e);
@@ -622,6 +613,8 @@ public class GpsTrailerService extends Service {
 
 	@Override
 	public void onTaskRemoved(Intent rootIntent) {
+		if (!CollectorServicePolicy.isCollectionEnabled(this))
+			return;
 		DebugLogFile.log("onTaskRemoved called, trying to restart");
 		ContextCompat.startForegroundService(this,new Intent(this,
 				GpsTrailerService.class));

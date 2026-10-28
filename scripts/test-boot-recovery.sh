@@ -4,7 +4,9 @@ cd "$(dirname "$0")/.."
 # Compile the real receiver with Android/app boundaries; JDK 9+ is sufficient.
 classes=$(mktemp -d)
 trap 'rm -rf "$classes"' EXIT
-mapfile -t fixtures < <(find tests/boot -name '*.java' -print)
+mapfile -t fixtures < <(find tests/boot tests/collector/stubs -name '*.java' -print)
 javac --release 8 -Xlint:-options -d "$classes" "${fixtures[@]}" \
+  app/src/main/java/com/rareventure/gps2/CollectorServicePolicy.java \
+  app/src/main/java/com/rareventure/gps2/JobSchedulerRestarterService.java \
   app/src/main/java/com/rareventure/gps2/bootup/GpsTrailerReceiver.java
 java -cp "$classes" BootRecoveryRegressionTest

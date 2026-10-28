@@ -32,7 +32,6 @@ import android.preference.Preference.OnPreferenceChangeListener;
 import android.preference.Preference.OnPreferenceClickListener;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceScreen;
-import android.support.v4.content.ContextCompat;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewTreeObserver;
@@ -41,11 +40,11 @@ import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import com.rareventure.android.SeekBarDialogPreference;
 import com.rareventure.android.widget.SeekBarWithText;
 import com.rareventure.gps2.GTG;
+import com.rareventure.gps2.CollectorServicePolicy;
 import com.rareventure.gps2.GTG.GTGAction;
 import com.rareventure.gps2.GTGPreferenceActivity;
 import com.rareventure.gps2.GpsTrailerCrypt;
 import com.rareventure.gps2.GpsTrailerGpsStrategy;
-import com.rareventure.gps2.GpsTrailerService;
 import com.rareventure.gps2.R;
 import com.rareventure.gps2.gpx.CreateGpxBackup;
 import com.rareventure.gps2.gpx.RestoreGpxBackup;
@@ -66,8 +65,7 @@ public class SettingsActivity extends GTGPreferenceActivity implements OnPrefere
 						{
 							public void run() {
 								//we need to restart the service because its preferences changed
-								stopService(new Intent(SettingsActivity.this, GpsTrailerService.class));
-								ContextCompat.startForegroundService(SettingsActivity.this,new Intent(SettingsActivity.this, GpsTrailerService.class));
+								CollectorServicePolicy.restartCollector(SettingsActivity.this);
 							}
 						});
 					}

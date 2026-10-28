@@ -11,6 +11,8 @@ public class JobSchedulerRestarterService extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters jobParameters) {
+        if (!CollectorServicePolicy.isCollectionEnabled(this))
+            return false;
         DebugLogFile.log("JobSchedulerRestarterService notifying receiver to restart service if necessary");
         Intent broadcastIntent = new Intent(this, GpsTrailerReceiver.class);
         sendBroadcast(broadcastIntent);
