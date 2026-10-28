@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 
-import junit.framework.Assert;
 
 import com.rareventure.android.Util;
 

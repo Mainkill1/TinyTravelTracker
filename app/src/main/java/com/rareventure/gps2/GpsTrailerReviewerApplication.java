@@ -26,6 +26,10 @@ import com.rareventure.gps2.R;
 import com.rareventure.gps2.reviewer.SettingsActivity;
 
 import android.app.Application;
+import android.app.Activity;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.View;
 import android.content.Context;
 import android.content.Intent;
 
@@ -77,5 +81,19 @@ public class GpsTrailerReviewerApplication extends Application
         Nammu.init(this);
         
         super.onCreate();
+        if (Build.VERSION.SDK_INT >= 35) {
+            registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+                @Override public void onActivityCreated(Activity activity, Bundle state) {
+                    View content = activity.findViewById(android.R.id.content);
+                    if (content != null) LegacyWindowInsets.install(content);
+                }
+                @Override public void onActivityStarted(Activity activity) { }
+                @Override public void onActivityResumed(Activity activity) { }
+                @Override public void onActivityPaused(Activity activity) { }
+                @Override public void onActivityStopped(Activity activity) { }
+                @Override public void onActivitySaveInstanceState(Activity activity, Bundle state) { }
+                @Override public void onActivityDestroyed(Activity activity) { }
+            });
+        }
     }
 }

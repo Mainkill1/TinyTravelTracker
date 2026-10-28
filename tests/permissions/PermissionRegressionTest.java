@@ -1,6 +1,6 @@
 import android.Manifest;
 import android.app.*;
-import android.support.v4.content.ContextCompat;
+import androidx.core.content.ContextCompat;
 import com.rareventure.gps2.*;
 import java.lang.reflect.Method;
 import java.util.Arrays;

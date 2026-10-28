@@ -30,7 +30,7 @@ Run `scripts/test-gps-regressions.sh` with JDK 9 or newer. This compiles the pro
 
 Below the configured battery cutoff, tracking now pauses with a visible notification and releases GPS, worker threads, alarms, and wake locks. It resumes when charging or when the battery reaches the cutoff. Invalid battery samples retain the previous state. An unplugged phone reporting `NOT_CHARGING` also obeys the cutoff.
 
-The full Android build still uses Gradle 5.1.1 / Android Gradle Plugin 3.4.0, JDK 8, SDK 26, and legacy dependencies. The standalone checks do not verify Android service integration or replace device testing. To verify on a device, cross the cutoff in both directions, connect/disconnect power below it, and confirm that recording pauses/resumes and the process does not repeatedly restart. Toggle system location off and back on while the device stays unlocked and confirm immediate recovery. Also check screen-off recording and disabling tracking while paused.
+The Android build uses Gradle 8.11.1 / Android Gradle Plugin 8.10.1, JDK 17, SDK 36, and AndroidX. The standalone checks do not verify Android service integration or replace device testing. To verify on a device, cross the cutoff in both directions, connect/disconnect power below it, and confirm that recording pauses/resumes and the process does not repeatedly restart. Toggle system location off and back on while the device stays unlocked and confirm immediate recovery. Also check screen-off recording and disabling tracking while paused.
 
 Changelog: (you can monitor the latest build here: https://f-droid.org/wiki/index.php?title=com.rareventure.gps2/lastbuild&redirect=no)
 

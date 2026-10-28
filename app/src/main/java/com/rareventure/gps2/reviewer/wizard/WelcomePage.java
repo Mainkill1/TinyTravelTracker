@@ -153,11 +153,11 @@ public class WelcomePage extends ProgressDialogActivity implements EulaListener
 //		E/ACRA    (23459):      at android.view.View$1.onClick(View.java:3586)
 //		E/ACRA    (23459):      ... 11 more
 //		E/ACRA    (23459): Caused by: java.lang.IllegalStateException: Can not perform this action after onSaveInstanceState
-//		E/ACRA    (23459):      at android.support.v4.app.FragmentManagerImpl.checkStateLoss(FragmentManager.java:1299)
-//		E/ACRA    (23459):      at android.support.v4.app.FragmentManagerImpl.enqueueAction(FragmentManager.java:1310)
+//		E/ACRA    (23459):      at androidx.fragment.app.FragmentManagerImpl.checkStateLoss(FragmentManager.java:1299)
+//		E/ACRA    (23459):      at androidx.fragment.app.FragmentManagerImpl.enqueueAction(FragmentManager.java:1310)
 //		E/ACRA    (23459):      at android.support.v4.app.BackStackRecord.commitInternal(BackStackRecord.java:541)
 //		E/ACRA    (23459):      at android.support.v4.app.BackStackRecord.commit(BackStackRecord.java:525)
-//		E/ACRA    (23459):      at android.support.v4.app.DialogFragment.show(DialogFragment.java:123)
+//		E/ACRA    (23459):      at androidx.fragment.app.DialogFragment.show(DialogFragment.java:123)
 //		E/ACRA    (23459):      at com.rareventure.android.ProgressDialogActivity.showDialog(ProgressDialogActivity.java:47)
 //		E/ACRA    (23459):      at com.rareventure.android.ProgressDialogActivity.runLongTask(ProgressDialogActivity.java:55)
 //		E/ACRA    (23459):      at com.rareventure.gps2.reviewer.wizard.WelcomePage.onNext(WelcomePage.java:94)

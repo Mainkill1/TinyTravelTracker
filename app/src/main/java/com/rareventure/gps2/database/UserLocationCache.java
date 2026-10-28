@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-import junit.framework.Assert;
 import android.database.Cursor;
 
 import com.rareventure.android.DbUtil;

@@ -1,5 +1,5 @@
 import android.content.*;
-import android.support.v4.content.ContextCompat;
+import androidx.core.content.ContextCompat;
 import com.rareventure.gps2.*;
 import com.rareventure.gps2.bootup.GpsTrailerReceiver;
 import javax.xml.parsers.DocumentBuilderFactory;
