@@ -99,6 +99,29 @@ public class GpsStrategyRegressionTest {
         check(f.reader.on, "100 percent GPS must stay enabled after a fix");
         f.stop();
     }
+    static void continuousGpsWithoutFix() throws Exception {
+        Fixture f = new Fixture();
+        GpsTrailerGpsStrategy.prefs.batteryGpsOnTimePercentage = 1f;
+        f.start();
+        SystemClock.now += 31 * 60 * 1000L;
+        int beforeWake = f.reader.calls;
+        f.strategy.notifyWoken();
+        await(() -> f.reader.calls > beforeWake);
+        synchronized (f.strategy) {
+            long nextEvent = (Long) field(f.strategy, "nextSignificantEvent");
+            check(nextEvent - SystemClock.now >= 15000,
+                    "31 minutes without a fix must schedule a new attempt instead of a 1 ms loop");
+        }
+        check(f.reader.on, "continuous GPS must remain registered without a fix");
+        f.strategy.gotReading();
+        await(() -> f.reader.calls > beforeWake + 1);
+        synchronized (f.strategy) {
+            long nextEvent = (Long) field(f.strategy, "nextSignificantEvent");
+            check(nextEvent - SystemClock.now >= 1000,
+                    "a late fix must not restore the continuous GPS busy loop");
+        }
+        f.stop();
+    }
     static void workerFailure() throws Exception {
         Fixture f = new Fixture();
         GTG.lastError = null;
@@ -121,7 +144,7 @@ public class GpsStrategyRegressionTest {
     }
     public static void main(String[] args) throws Exception {
         int failures = 0;
-        for (int test = 0; test < 8; test++) {
+        for (int test = 0; test < 9; test++) {
             try {
                 if (test == 0) overdueDeadline(1);
                 if (test == 1) overdueDeadline(0);
@@ -131,6 +154,7 @@ public class GpsStrategyRegressionTest {
                 if (test == 5) continuousGps();
                 if (test == 6) workerFailure();
                 if (test == 7) wakeAfterShutdown();
+                if (test == 8) continuousGpsWithoutFix();
                 System.out.println("PASS GPS regression " + test);
             } catch (AssertionError e) {
                 failures++;

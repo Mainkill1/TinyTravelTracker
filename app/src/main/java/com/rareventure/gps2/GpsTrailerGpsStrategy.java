@@ -285,7 +285,10 @@ public class GpsTrailerGpsStrategy {
 					nextSignificantEvent = desireManager.waitTimeMs + timeFromPhoneBootMs;
 
 					if (prefs.batteryGpsOnTimePercentage == 1.0f) {
-						// don't disable gps if want to use it 100% of time
+						// Start a new attempt window while leaving GPS registered.
+						// Reusing the expired window would finish it every millisecond.
+						gpsAttemptStartedFromPhoneBootMs = timeFromPhoneBootMs;
+						nextSignificantEvent = timeFromPhoneBootMs + desireManager.currTimeWanted;
 						return true;
 					}
 
