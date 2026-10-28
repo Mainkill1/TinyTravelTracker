@@ -389,9 +389,9 @@ public class GpsTrailerCacheCreator extends Thread {
 				// periodically. we should probably have a notification mechanism
 				GTG.mediaLocTimeMap.deleteMarkedMltsFromDb();
 		
-				//we wait until we think there may be more points if we're fully updated, or
-				// for a short while if we were not fully finished since last time
-				long waitTime = ((mediaDirty && gtum != null) ? 0 : nextTimeToLoadPointsMs - System.currentTimeMillis());
+				// Wait for the next GPS poll once caught up; unfinished batches retry immediately.
+				// Gallery loading is disabled above, so mediaDirty must not suppress this wait.
+				long waitTime = nextTimeToLoadPointsMs - System.currentTimeMillis();
 //				Log.d(GTG.TAG, "Sleeping for "+waitTime);
 				
 				if(isShutdown)
