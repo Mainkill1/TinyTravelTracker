@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 public class WindowInsetsTest {
     @Test public void systemBarsKeepContentVisibleWithoutAccumulatingPadding() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+
             Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
             View content = new View(context);
             content.setPadding(1, 2, 3, 4);
@@ -27,6 +28,13 @@ public class WindowInsetsTest {
             assertEquals(1, content.getPaddingLeft());
             assertEquals(32, content.getPaddingTop());
             assertEquals(3, content.getPaddingRight());
+            assertEquals(28, content.getPaddingBottom());
+            WindowInsetsCompat keyboard = new WindowInsetsCompat.Builder(insets)
+                    .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, 300))
+                    .build();
+            ViewCompat.dispatchApplyWindowInsets(content, keyboard);
+            assertEquals(304, content.getPaddingBottom());
+            ViewCompat.dispatchApplyWindowInsets(content, insets);
             assertEquals(28, content.getPaddingBottom());
         });
     }

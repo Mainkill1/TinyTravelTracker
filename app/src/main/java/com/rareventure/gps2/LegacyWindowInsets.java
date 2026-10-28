@@ -16,7 +16,7 @@ final class LegacyWindowInsets {
         final int bottom = content.getPaddingBottom();
         ViewCompat.setOnApplyWindowInsetsListener(content, (view, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()
-                    | WindowInsetsCompat.Type.displayCutout());
+                    | WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.ime());
             view.setPadding(left + insets.left, top + insets.top,
                     right + insets.right, bottom + insets.bottom);
             return WindowInsetsCompat.CONSUMED;
