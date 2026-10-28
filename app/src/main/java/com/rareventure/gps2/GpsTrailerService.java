@@ -112,6 +112,26 @@ public class GpsTrailerService extends Service {
 
 	private BroadcastReceiver batteryReceiver;
 
+	private final BatteryTrackingController batteryTracking = new BatteryTrackingController(
+			new BatteryTrackingController.Listener() {
+				@Override public void startTracking() {
+					try {
+						gpsManager = new GpsTrailerManager(null, GpsTrailerService.this,
+								TAG, getMainLooper());
+						gpsManager.start();
+					} catch (Exception e) {
+						shutdownWithException(e);
+						ACRA.getErrorReporter().handleException(e);
+					}
+				}
+				@Override public void stopTracking() {
+					if (gpsManager != null) {
+						gpsManager.shutdown();
+						gpsManager = null;
+					}
+				}
+			});
+
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		/* ttt_installer:remove_line */Log.d(GTG.TAG, "Starting on intent " + intent);
@@ -166,7 +186,7 @@ public class GpsTrailerService extends Service {
 			}
 			else if (event == GTGEvent.ERROR_LOW_BATTERY) {
 				updateNotification(FLAG_BATTERY_LOW, true);
-				stopSelf();
+				// The battery receiver pauses GPS while remaining alive for recovery.
 				return true;
 			}
 			else if (event == GTGEvent.TRIAL_PERIOD_EXPIRED) {
@@ -277,8 +297,8 @@ public class GpsTrailerService extends Service {
 					R.string.service_error_low_free_space, true,
 					FLAG_ERROR_LOW_FREE_SPACE, 0, null, false),
 
-			new NotificationSetting(-1, -1, false, FLAG_BATTERY_LOW, 0, null,
-							false),
+			new NotificationSetting(R.drawable.green, R.string.service_battery_paused,
+					false, FLAG_BATTERY_LOW, 0, null, true),
 
 			new NotificationSetting(R.drawable.red_error,
 					R.string.service_gps_must_grant_permission, true, FLAG_ERROR_NO_GPS_PERMISSION,
@@ -411,37 +431,20 @@ public class GpsTrailerService extends Service {
 
 			updateNotification(FLAG_COLLECT_ENABLED, true);
 
-			//co because we don't want gps2data files in the root directory of sdcard. they take up too much space
-//			        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
-//			        File dataFile = new File(Environment.getExternalStorageDirectory(), "gps2data"+sdf.format(new Date())+".txt");
-			File dataFile = null;
-						gpsManager = new GpsTrailerManager(dataFile, this, TAG, this.getMainLooper());
-//			gpsManager = new GpsTrailerManager(null, this, TAG,
-//					this.getMainLooper());
-
-			//note that there is no way to receive the current status of the battery
-			//However, the battery receiver will get a notification as soon as its registered
-			// to the current status of the battery
+			// Do not construct or start GPS until a valid battery sample permits it.
 			batteryReceiver = new BroadcastReceiver() {
 
 				@Override
 				public void onReceive(Context context, Intent intent) {
-					float batteryLeft = ((float) intent.getIntExtra(
-							BatteryManager.EXTRA_LEVEL, -1))
-							/ intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-
-					/* ttt_installer:remove_line */Log.d(GTG.TAG, "Received battery info, batteryLeft: "+ batteryLeft);
-
-					int status = intent.getIntExtra("status",
+					int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS,
 							BatteryManager.BATTERY_STATUS_UNKNOWN);
-
-					if (batteryLeft < GTG.prefs.minBatteryPerc
-							&& (status == BatteryManager.BATTERY_STATUS_DISCHARGING || status == BatteryManager.BATTERY_STATUS_UNKNOWN)) {
-						updateNotification(FLAG_BATTERY_LOW, true);
-						GTG.alert(GTGEvent.ERROR_LOW_BATTERY);
-					}
-					else
-						updateNotification(FLAG_BATTERY_LOW, false);
+					boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING
+							|| status == BatteryManager.BATTERY_STATUS_FULL;
+					batteryTracking.update(
+							intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1),
+							intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1),
+							charging, GTG.prefs.minBatteryPerc);
+					updateNotification(FLAG_BATTERY_LOW, batteryTracking.isBatteryLow());
 
 					//we wait until now to finish startup 
 					//because otherwise if the battery is low
@@ -458,7 +461,6 @@ public class GpsTrailerService extends Service {
 					Intent.ACTION_BATTERY_CHANGED);
 			registerReceiver(batteryReceiver, batteryLevelFilter);
 
-			gpsManager.start();
 
 			//hack to try and keep our service from shutting down and never restarting
 			JobScheduler jobScheduler = (JobScheduler)getApplicationContext()
@@ -467,7 +469,7 @@ public class GpsTrailerService extends Service {
 					JobSchedulerRestarterService.class);
 
 			JobInfo jobInfoObj = new JobInfo.Builder(1, componentName)
-					.setPeriodic(600*1000).setPersisted(true).build();
+					.setPeriodic(15 * 60 * 1000L).setPersisted(true).build();
 			jobScheduler.schedule(jobInfoObj);
 		}
 		catch (Exception e) {
@@ -520,8 +522,9 @@ public class GpsTrailerService extends Service {
 				((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).createNotificationChannel(channel);
 
 				Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-						.setContentTitle("")
-						.setContentText("").build();
+						.setSmallIcon(R.drawable.green)
+						.setContentTitle("Tiny Travel Tracker")
+						.setContentText(getText(R.string.service_active)).build();
 
 				startForeground(1, notification);
 			}
@@ -578,13 +581,8 @@ public class GpsTrailerService extends Service {
 		if (batteryReceiver != null)
 			unregisterReceiver(batteryReceiver);
 
-		if (GTG.prefs.isCollectData ) //|| GTGEvent.ERROR_UNLICENSED.isOn)
-		{
-			Log.i("EXIT", "ondestroy!");
-			//hack to restart the service if the os decides to kill us.
-			Intent broadcastIntent = new Intent(this, GpsTrailerReceiver.class);
-			sendBroadcast(broadcastIntent);
-		}
+		if (GTG.service == this) GTG.service = null;
+
 		DebugLogFile.log("onDestroy called, restart finished");
 	}
 

@@ -306,4 +306,5 @@
         <item>@string/fri</item>
         <item>@string/sat</item>
     </string-array>
+    <string name="service_battery_paused">GPS paused to conserve battery. Tracking resumes when charging or above the battery cutoff.</string>
 </resources>

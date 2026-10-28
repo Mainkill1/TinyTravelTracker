@@ -80,7 +80,7 @@ public class GpsTrailerGpsStrategy {
 		this.intentTimer = intentTimer;
 	}
 	
-	private boolean isShutdownRequested;
+	private volatile boolean isShutdownRequested;
 
 	protected boolean isShutdown;
 
@@ -408,8 +408,12 @@ public class GpsTrailerGpsStrategy {
 
 								timeFromPhoneBootMs = SystemClock.elapsedRealtime();
 
-								waitTimeMs = nextSignificantEvent - timeFromPhoneBootMs;
-								GpsTrailerGpsStrategy.this.wait( waitTimeMs );
+								long remainingMs = nextSignificantEvent - timeFromPhoneBootMs;
+								// Alarm setup or device sleep may have consumed the deadline.
+								// wait(0) waits forever; wait(negative) kills this worker.
+								if (remainingMs > 0) {
+									GpsTrailerGpsStrategy.this.wait(remainingMs);
+								}
 
 								intentTimer.acquireWakeLock();
 
@@ -420,6 +424,9 @@ public class GpsTrailerGpsStrategy {
 							if(isShutdownRequested)
 								break;
 							/* ttt_installer:remove_line */DebugLogFile.log("About to update strategy");
+							// Charge only time actually spent running GPS, including early
+							// notifications, rather than the timeout we intended to wait.
+							waitTimeMs = Math.max(0, timeFromPhoneBootMs - lastGpsStatsUpdateFromPhoneBootMs);
 							wantGps = updateFromStrategyThreadOnly(waitTimeMs);
 							lastGpsStatsUpdateFromPhoneBootMs = timeFromPhoneBootMs;
 						}
@@ -450,14 +457,22 @@ public class GpsTrailerGpsStrategy {
 				}
 				finally
 				{
-					intentTimer.releaseWakeLock();
+					try {
+						gpsReader.turnOff();
+						intentTimer.cancel();
+					} finally {
+						try {
+							intentTimer.releaseWakeLock();
+						} finally {
+							// Also signal when returning early during shutdown.
+							synchronized(GpsTrailerGpsStrategy.this) {
+								GpsTrailerGpsStrategy.this.isShutdown = true;
+								GpsTrailerGpsStrategy.this.notifyAll();
+							}
+						}
+					}
 				}
-				
-				synchronized(GpsTrailerGpsStrategy.this)
-				{
-					GpsTrailerGpsStrategy.this.isShutdown = true;
-					GpsTrailerGpsStrategy.this.notify();
-				}
+
 			} //end run
 
 //			private void writeGpsStrategyThreadStatus(long timeToSleep, byte mode) {
