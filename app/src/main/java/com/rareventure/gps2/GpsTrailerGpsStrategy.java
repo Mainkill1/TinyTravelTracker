@@ -23,6 +23,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 import android.os.SystemClock;
+import android.util.Log;
 
 import com.rareventure.android.GpsReader;
 import com.rareventure.android.IntentTimer;
@@ -80,7 +81,7 @@ public class GpsTrailerGpsStrategy {
 		this.intentTimer = intentTimer;
 	}
 	
-	private boolean isShutdownRequested;
+	private volatile boolean isShutdownRequested;
 
 	protected boolean isShutdown;
 
@@ -284,7 +285,10 @@ public class GpsTrailerGpsStrategy {
 					nextSignificantEvent = desireManager.waitTimeMs + timeFromPhoneBootMs;
 
 					if (prefs.batteryGpsOnTimePercentage == 1.0f) {
-						// don't disable gps if want to use it 100% of time
+						// Start a new attempt window while leaving GPS registered.
+						// Reusing the expired window would finish it every millisecond.
+						gpsAttemptStartedFromPhoneBootMs = timeFromPhoneBootMs;
+						nextSignificantEvent = timeFromPhoneBootMs + desireManager.currTimeWanted;
 						return true;
 					}
 
@@ -363,8 +367,8 @@ public class GpsTrailerGpsStrategy {
 
 			public void run()
 			{
-				intentTimer.acquireWakeLock();
 				try {
+					intentTimer.acquireWakeLock();
 					boolean wantGps = true;
 					
 					while(!isShutdownRequested)
@@ -408,8 +412,12 @@ public class GpsTrailerGpsStrategy {
 
 								timeFromPhoneBootMs = SystemClock.elapsedRealtime();
 
-								waitTimeMs = nextSignificantEvent - timeFromPhoneBootMs;
-								GpsTrailerGpsStrategy.this.wait( waitTimeMs );
+								long remainingMs = nextSignificantEvent - timeFromPhoneBootMs;
+								// Alarm setup or device sleep may have consumed the deadline.
+								// wait(0) waits forever; wait(negative) kills this worker.
+								if (remainingMs > 0) {
+									GpsTrailerGpsStrategy.this.wait(remainingMs);
+								}
 
 								intentTimer.acquireWakeLock();
 
@@ -420,6 +428,9 @@ public class GpsTrailerGpsStrategy {
 							if(isShutdownRequested)
 								break;
 							/* ttt_installer:remove_line */DebugLogFile.log("About to update strategy");
+							// Charge only time actually spent running GPS, including early
+							// notifications, rather than the timeout we intended to wait.
+							waitTimeMs = Math.max(0, timeFromPhoneBootMs - lastGpsStatsUpdateFromPhoneBootMs);
 							wantGps = updateFromStrategyThreadOnly(waitTimeMs);
 							lastGpsStatsUpdateFromPhoneBootMs = timeFromPhoneBootMs;
 						}
@@ -441,7 +452,9 @@ public class GpsTrailerGpsStrategy {
 					/* ttt_installer:remove_line */DebugLogFile.log("Gps Strategy is shutdown");
 				} catch (Exception e)
 				{
-					e.printStackTrace();
+					isShutdownRequested = true;
+					Log.e("GpsTrailerGpsStrategy", "GPS worker failed", e);
+					GTG.alert(GTG.GTGEvent.ERROR_SERVICE_INTERNAL_ERROR);
 					try {
 						TestUtil.writeException(os ,e);
 					} catch (IOException e1) {
@@ -450,14 +463,24 @@ public class GpsTrailerGpsStrategy {
 				}
 				finally
 				{
-					intentTimer.releaseWakeLock();
+					try {
+						try {
+							gpsReader.turnOff();
+						} finally {
+							intentTimer.cancel();
+						}
+					} finally {
+						synchronized(GpsTrailerGpsStrategy.this) {
+							try {
+								intentTimer.releaseWakeLock();
+							} finally {
+								GpsTrailerGpsStrategy.this.isShutdown = true;
+								GpsTrailerGpsStrategy.this.notifyAll();
+							}
+						}
+					}
 				}
-				
-				synchronized(GpsTrailerGpsStrategy.this)
-				{
-					GpsTrailerGpsStrategy.this.isShutdown = true;
-					GpsTrailerGpsStrategy.this.notify();
-				}
+
 			} //end run
 
 //			private void writeGpsStrategyThreadStatus(long timeToSleep, byte mode) {
@@ -730,12 +753,11 @@ public class GpsTrailerGpsStrategy {
 	}
 
 	public void notifyWoken() {
-		//make sure we stay awake until we want to sleep again
-//		DebugLogFile.log("gps manager notify woken");
-		intentTimer.acquireWakeLock();
-		synchronized(this)
-		{
-			this.notify();
+		synchronized(this) {
+			// A delayed alarm or job can arrive after the worker has stopped.
+			if (isShutdownRequested || isShutdown) return;
+			intentTimer.acquireWakeLock();
+			notify();
 		}
 	}
 
