@@ -1,0 +1,14 @@
+Tangram ES 0.10.1: https://github.com/tangrams/tangram-es
+Source revision: 3b0463a8bbbb3a3164593a93eeff5465d0b79360
+Native libraries independently rebuilt with Android NDK r28c; no source changes.
+Upstream Java classes and resources are preserved from the official release AAR.
+Original source and dependency license notices accompany the rebuilt AAR under
+META-INF/tangram-licenses. Android NDK runtime notices are included there too.
+
+Portions of this software are copyright (c) 2016 The FreeType Project
+(www.freetype.org). All rights reserved.
+
+The bundled FreeType 2.7 source omitted its docs directory. FreeType-FTL.txt is
+the unmodified FreeType Project License from the corresponding upstream release:
+https://github.com/freetype/freetype/blob/d2d5968aed5bc264c885c54d0a50e5355808ab78/docs/FTL.TXT
+FreeType is used under that license.
