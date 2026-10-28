@@ -87,6 +87,13 @@ public class MyMapController extends MapController {
             }
 
             @Override
+            public void onLongPressCancel() {
+                if (responder != null) {
+                    responder.onLongPressCancel();
+                }
+            }
+
+            @Override
             public void onLongPressUp(float x, float y) {
                 if (responder != null) {
                     responder.onLongPressUp(x, y);

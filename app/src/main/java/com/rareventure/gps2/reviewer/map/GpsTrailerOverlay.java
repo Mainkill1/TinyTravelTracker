@@ -945,6 +945,11 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 	}
 
 	@Override
+	public void onLongPressCancel() {
+		sasDrawer.resetToSas();
+	}
+
+	@Override
 	public boolean onLongPressEnd(float startX, float startY, float endX,
 								  float endY) {
 

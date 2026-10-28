@@ -81,12 +81,12 @@ public class MyTouchInput implements OnTouchListener {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             // Recover even if Android did not deliver the previous terminal event.
-            longPressActive = false;
+            cancelLongPress();
         }
         boolean customGesture = longPressActive;
         if (action == MotionEvent.ACTION_CANCEL) {
             // Cancellation discards selection; only a real UP commits it.
-            longPressActive = false;
+            cancelLongPress();
         } else if (action == MotionEvent.ACTION_UP && longPressActive) {
             longPressActive = false;
             if (longPressResponder != null) {
@@ -101,6 +101,15 @@ public class MyTouchInput implements OnTouchListener {
             orig.onTouch(view, event);
         }
         return true;
+    }
+
+    private void cancelLongPress() {
+        if (longPressActive) {
+            longPressActive = false;
+            if (longPressResponder != null) {
+                longPressResponder.onLongPressCancel();
+            }
+        }
     }
 
     /**
@@ -123,6 +132,9 @@ public class MyTouchInput implements OnTouchListener {
          * @param y The y screen coordinate of the pressed point
          */
         void onLongPressUp(float x, float y);
+
+        /** Discard a cancelled long-press preview without committing selection. */
+        void onLongPressCancel();
 
         /**
          * Called repeatedly while a touch point is dragged after a long press

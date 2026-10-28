@@ -12,7 +12,9 @@ inertia after release. Invalid scale factors never reach the renderer.
 
 Long-press fixtures cover cancellation before custom ownership, continued custom
 drag, release without a stray SDK UP, CANCEL without committing selection, and
-fresh-DOWN recovery when an old terminal event is missing.
+fresh-DOWN recovery when an old terminal event is missing. Cancellation propagates
+through the controller responder chain; overlays discard the preview rectangle
+without adding a selected area.
 
 Primary sources:
 - https://github.com/tangrams/tangram-es/blob/0.10.1/platforms/android/tangram/src/main/java/com/mapzen/tangram/TouchInput.java

@@ -552,6 +552,13 @@ public class OsmMapView extends MapView implements MapView.MapReadyCallback {
 			}
 
 			@Override
+			public void onLongPressCancel() {
+				for (GpsOverlay overlay : overlays) {
+					overlay.onLongPressCancel();
+				}
+			}
+
+			@Override
 			public void onLongPressUp(float x, float y) {
 				for(GpsOverlay overlay : overlays)
 				{

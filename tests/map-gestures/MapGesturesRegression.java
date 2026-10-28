@@ -8,13 +8,14 @@ public class MapGesturesRegression {
  private static void check(boolean b,String message) { if(!b) { failures++; System.err.println("FAIL: "+message); } }
  private static MotionEvent event(int action) { return new MotionEvent(action,25,30); }
  private static class Responder implements MyTouchInput.LongPressResponder {
-  final TouchInput sdk; int starts,ends,drags;
+  final TouchInput sdk; int starts,ends,drags,cancels;
   Responder(TouchInput sdk) { this.sdk=sdk; }
   public void onLongPress(float x,float y) { starts++; check(sdk.cancelled,"SDK must be cancelled before custom ownership callback"); }
   public void onLongPressUp(float x,float y) { ends++; }
+  public void onLongPressCancel() { cancels++; }
   public boolean onLongPressPan(float x,float y,float ex,float ey) { drags++; return true; }
  }
- public static void main(String[] args) {
+ public static void main(String[] args) throws Exception {
   MyMapController c=new MyMapController(new Context()); c.setupTouchListener();
   TouchInput.ScaleResponder scale=c.getTouchInput().scaleResponder;
   scale.onScaleBegin();
@@ -37,6 +38,7 @@ public class MapGesturesRegression {
   input.onTouch(null,event(MotionEvent.ACTION_DOWN)); input.onTouch(null,event(MotionEvent.ACTION_MOVE)); input.onTouch(null,event(MotionEvent.ACTION_UP));
   check(sdk.events.toString().equals("[0, 3, 0, 2, 1]"),"CANCEL must release custom ownership and deliver next full stream: "+sdk.events);
   check(r.ends==0,"cancelled selection must not commit onLongPressUp");
+  check(r.cancels==1,"CANCEL must discard selection preview exactly once");
 
   sdk=new TouchInput(); input=new MyTouchInput(new Context(),sdk); r=new Responder(sdk); input.setLongPressResponder(r);
   input.onTouch(null,event(0)); input.onLongPress(event(0)); input.onTouch(null,event(1));
@@ -47,6 +49,14 @@ public class MapGesturesRegression {
   input.onTouch(null,event(0)); input.onLongPress(event(0)); input.onTouch(null,event(0)); input.onTouch(null,event(1));
   check(sdk.events.toString().equals("[0, 3, 0, 1]"),"fresh DOWN must recover even when terminal event was missing: "+sdk.events);
   check(r.ends==0,"new DOWN must discard stale custom selection");
+  check(r.cancels==1,"fresh DOWN must discard stale selection preview exactly once");
+  c=new MyMapController(new Context()); c.setupTouchListener(); r=new Responder(c.input);
+  c.setLongPressResponderExt(r);
+  c.handleGesture(new MapView(),event(0));
+  java.lang.reflect.Field field=MyMapController.class.getDeclaredField("touchInput"); field.setAccessible(true);
+  ((MyTouchInput)field.get(c)).onLongPress(event(0));
+  c.handleGesture(new MapView(),event(3));
+  check(r.cancels==1 && r.ends==0,"controller responder chain must forward cancellation without commit");
   if(failures>0) throw new AssertionError(failures+" gesture regression assertions failed");
   System.out.println("PASS: direct scales, invalid scales, ownership cancellation, drag, UP/CANCEL/new-DOWN recovery");
  }
