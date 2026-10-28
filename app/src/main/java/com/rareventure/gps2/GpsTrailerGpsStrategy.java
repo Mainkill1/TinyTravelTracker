@@ -23,6 +23,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 import android.os.SystemClock;
+import android.util.Log;
 
 import com.rareventure.android.GpsReader;
 import com.rareventure.android.IntentTimer;
@@ -363,8 +364,8 @@ public class GpsTrailerGpsStrategy {
 
 			public void run()
 			{
-				intentTimer.acquireWakeLock();
 				try {
+					intentTimer.acquireWakeLock();
 					boolean wantGps = true;
 					
 					while(!isShutdownRequested)
@@ -448,7 +449,9 @@ public class GpsTrailerGpsStrategy {
 					/* ttt_installer:remove_line */DebugLogFile.log("Gps Strategy is shutdown");
 				} catch (Exception e)
 				{
-					e.printStackTrace();
+					isShutdownRequested = true;
+					Log.e("GpsTrailerGpsStrategy", "GPS worker failed", e);
+					GTG.alert(GTG.GTGEvent.ERROR_SERVICE_INTERNAL_ERROR);
 					try {
 						TestUtil.writeException(os ,e);
 					} catch (IOException e1) {
@@ -458,14 +461,16 @@ public class GpsTrailerGpsStrategy {
 				finally
 				{
 					try {
-						gpsReader.turnOff();
-						intentTimer.cancel();
-					} finally {
 						try {
-							intentTimer.releaseWakeLock();
+							gpsReader.turnOff();
 						} finally {
-							// Also signal when returning early during shutdown.
-							synchronized(GpsTrailerGpsStrategy.this) {
+							intentTimer.cancel();
+						}
+					} finally {
+						synchronized(GpsTrailerGpsStrategy.this) {
+							try {
+								intentTimer.releaseWakeLock();
+							} finally {
 								GpsTrailerGpsStrategy.this.isShutdown = true;
 								GpsTrailerGpsStrategy.this.notifyAll();
 							}
@@ -745,12 +750,11 @@ public class GpsTrailerGpsStrategy {
 	}
 
 	public void notifyWoken() {
-		//make sure we stay awake until we want to sleep again
-//		DebugLogFile.log("gps manager notify woken");
-		intentTimer.acquireWakeLock();
-		synchronized(this)
-		{
-			this.notify();
+		synchronized(this) {
+			// A delayed alarm or job can arrive after the worker has stopped.
+			if (isShutdownRequested || isShutdown) return;
+			intentTimer.acquireWakeLock();
+			notify();
 		}
 	}
 

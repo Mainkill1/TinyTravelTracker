@@ -99,9 +99,29 @@ public class GpsStrategyRegressionTest {
         check(f.reader.on, "100 percent GPS must stay enabled after a fix");
         f.stop();
     }
+    static void workerFailure() throws Exception {
+        Fixture f = new Fixture();
+        GTG.lastError = null;
+        f.reader.failure = new IllegalArgumentException("location registration failed");
+        f.strategy.start();
+        f.thread.join(1000);
+        check(!f.thread.isAlive(), "failed worker must finish cleanup");
+        f.strategy.notifyWoken();
+        check(!f.timer.held, "waking a failed worker must not leak a wake lock");
+        check(GTG.lastError == GTG.GTGEvent.ERROR_SERVICE_INTERNAL_ERROR,
+                "worker failure must stop the active service through its error handler");
+        f.stop();
+    }
+    static void wakeAfterShutdown() throws Exception {
+        Fixture f = new Fixture();
+        f.start();
+        f.stop();
+        f.strategy.notifyWoken();
+        check(!f.timer.held, "a late service wake must not reacquire a shutdown worker's lock");
+    }
     public static void main(String[] args) throws Exception {
         int failures = 0;
-        for (int test = 0; test < 6; test++) {
+        for (int test = 0; test < 8; test++) {
             try {
                 if (test == 0) overdueDeadline(1);
                 if (test == 1) overdueDeadline(0);
@@ -109,6 +129,8 @@ public class GpsStrategyRegressionTest {
                 if (test == 3) earlyReadingBudget();
                 if (test == 4) shutdownDuringAlarmSetup();
                 if (test == 5) continuousGps();
+                if (test == 6) workerFailure();
+                if (test == 7) wakeAfterShutdown();
                 System.out.println("PASS GPS regression " + test);
             } catch (AssertionError e) {
                 failures++;
