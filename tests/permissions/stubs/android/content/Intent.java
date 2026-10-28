@@ -4,6 +4,7 @@ public class Intent {
   public Class<?> target;
 
   public Intent() {}
+ public Intent(String action, android.net.Uri uri) {}
 
   public Intent(Context c, Class<?> t) {
     target = t;

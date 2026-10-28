@@ -62,7 +62,7 @@ public class IntentTimer {
 	public IntentTimer(Context context, Class<?> componentClass) {
 		Intent intent = new Intent(context, componentClass);
 	    sender = PendingIntent.getBroadcast(context,
-	            0, intent, 0);
+	            0, intent, Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
 
 	    alarmManager = (AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
 	    
@@ -103,7 +103,14 @@ public class IntentTimer {
 	private static class SetAlarmMarshmallow {
 		public static void setAlarm(AlarmManager alarmManager, int elapsedRealtimeWakeup, long timeToWakeFromPhoneBoot, PendingIntent sender)
 		{
-			alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, timeToWakeFromPhoneBoot, sender);
+            if (Build.VERSION.SDK_INT >= 31) {
+                // Recording duty cycles do not require special exact-alarm access. Doze may delay this wake.
+                alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        timeToWakeFromPhoneBoot, sender);
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        timeToWakeFromPhoneBoot, sender);
+            }
 		}
 	}
 	
