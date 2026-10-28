@@ -39,3 +39,6 @@ import-summary.txt
 
 #this gets built in a subproject
 app/libs/tangram-release.aar
+
+# Checksum-verified external release artifacts
+.dependencies/
