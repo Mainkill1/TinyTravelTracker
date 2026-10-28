@@ -21,9 +21,6 @@ package com.rareventure.android;
 
 import com.rareventure.gps2.database.TAssert;
 
-import junit.framework.Assert;
-
-
 
 public class DataBuffer {
 	
@@ -72,14 +69,18 @@ public class DataBuffer {
 	}
 
 	/**
-	 * Updates the read index, indicating that the current read index now has
-	 * valid data to be processed
+	 * Publishes a reading, reserving one slot to distinguish full from empty.
+	 * If full, retain the queued readings and discard the newly written one.
+	 * Callers must synchronize producer and consumer access to this buffer.
+	 * @return true if the new reading was discarded
 	 */
 	public boolean updateReadIndex() {
-		rawReadIndex = (rawReadIndex+1) & (buffSizeMinusOne);
-		if(rawReadIndex == rawProcessIndex)
+		int nextReadIndex = (rawReadIndex + 1) & buffSizeMinusOne;
+		if (nextReadIndex == rawProcessIndex) {
 			processDataOverflow = true;
-		
+			return true;
+		}
+		rawReadIndex = nextReadIndex;
 		return false;
 	}
 

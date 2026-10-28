@@ -25,7 +25,6 @@ import java.io.IOException;
 import com.rareventure.android.AndroidPreferenceSet.AndroidPreferences;
 import com.rareventure.gps2.GTG;
 import com.rareventure.gps2.GTG.GTGEvent;
-import com.rareventure.gps2.GpsTrailerService;
 
 import android.Manifest;
 import android.content.Context;
@@ -36,9 +35,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.support.v4.app.ActivityCompat;
-import android.util.Log;
 
 public class GpsReader implements DataReader
 {
@@ -52,17 +49,14 @@ public class GpsReader implements DataReader
 
 		@Override
 		public void onLocationChanged(Location location) {
-			//store the location
-				
-			gpsDataBuffer.lat[gpsDataBuffer.rawReadIndex] = location.getLatitude();
-			gpsDataBuffer.lon[gpsDataBuffer.rawReadIndex] = location.getLongitude();
-			gpsDataBuffer.alt[gpsDataBuffer.rawReadIndex] = location.getAltitude();
-			gpsDataBuffer.timeRead[gpsDataBuffer.rawReadIndex] = System.currentTimeMillis();
-				
-			synchronized(processThread.lock)
-			{
+			synchronized(processThread.lock) {
+				int index = gpsDataBuffer.rawReadIndex;
+				gpsDataBuffer.lat[index] = location.getLatitude();
+				gpsDataBuffer.lon[index] = location.getLongitude();
+				gpsDataBuffer.alt[index] = location.getAltitude();
+				gpsDataBuffer.timeRead[index] = location.getTime();
 				gpsDataBuffer.updateReadIndex();
-				processThread.lock.notify();
+				processThread.lock.notifyAll();
 			}
 		}
 
@@ -126,37 +120,44 @@ public class GpsReader implements DataReader
 
 	@Override
 	public boolean canProcess() {
-		return gpsDataBuffer.rawProcessIndex != gpsDataBuffer.rawReadIndex;
+		synchronized(processThread.lock) {
+			return gpsDataBuffer.rawProcessIndex != gpsDataBuffer.rawReadIndex;
+		}
 	}
 
 	@Override
 	public void process() {
-		gpsProcessor.processGpsData(gpsDataBuffer.lon[gpsDataBuffer.rawProcessIndex],
-				gpsDataBuffer.lat[gpsDataBuffer.rawProcessIndex],
-				gpsDataBuffer.alt[gpsDataBuffer.rawProcessIndex],
-				gpsDataBuffer.timeRead[gpsDataBuffer.rawProcessIndex]);
-		
-		if(os != null)
-			writeTestData();
-
-		gpsDataBuffer.updateProcessIndex();
+		final double lon, lat, alt;
+		final long time;
+		synchronized(processThread.lock) {
+			if (!canProcess()) return;
+			int index = gpsDataBuffer.rawProcessIndex;
+			lon = gpsDataBuffer.lon[index];
+			lat = gpsDataBuffer.lat[index];
+			alt = gpsDataBuffer.alt[index];
+			time = gpsDataBuffer.timeRead[index];
+			gpsDataBuffer.updateProcessIndex();
+		}
+		// Database writes must not block callbacks or retain a reusable buffer slot.
+		gpsProcessor.processGpsData(lon, lat, alt, time);
+		if (os != null) writeTestData(lon, lat, alt, time);
 	}
-	
+
 	@Override
 	public void notifyShutdown() {
 		turnOff();
 	}
 
-	private void writeTestData() {
+	private void writeTestData(double lon, double lat, double alt, long time) {
 		synchronized(TestUtil.class)
 		{
 			try {
 				TestUtil.writeMode(os, WriteConstants.MODE_WRITE_GPS_DATA2);
 		
-				TestUtil.writeDouble("lat",os, gpsDataBuffer.lat[gpsDataBuffer.rawProcessIndex]);
-		    	TestUtil.writeDouble("lon",os, gpsDataBuffer.lon[gpsDataBuffer.rawProcessIndex]);
-		    	TestUtil.writeDouble("alt",os, gpsDataBuffer.alt[gpsDataBuffer.rawProcessIndex]);
-		    	TestUtil.writeLong("time",os, gpsDataBuffer.timeRead[gpsDataBuffer.rawProcessIndex]);
+				TestUtil.writeDouble("lat",os, lat);
+				TestUtil.writeDouble("lon",os, lon);
+				TestUtil.writeDouble("alt",os, alt);
+				TestUtil.writeLong("time",os, time);
 			}
 			catch(IOException e)
 			{
