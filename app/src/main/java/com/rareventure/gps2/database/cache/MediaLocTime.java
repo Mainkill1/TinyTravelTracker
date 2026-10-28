@@ -399,8 +399,9 @@ public class MediaLocTime extends EncryptedRow implements BoundedObject {
 	}
 
 	public Uri getUri(Context context) {
-		return Uri.fromFile(new File(Util.getDataFilepathForMedia(context.getContentResolver(), 
-				getFk(), !isVideo())));
+        return android.content.ContentUris.withAppendedId(
+                isVideo() ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                getFk());
 	}
 
 	public String getMimeType(ContentResolver cr) {

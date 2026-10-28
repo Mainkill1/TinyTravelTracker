@@ -50,7 +50,7 @@ public class DiagnosticsRegressionTest {
     }
     static void enabledFile() throws Exception {
         GTG.prefs.writeFileLogDebug = true;
-        Path log = Environment.directory.toPath().resolve("ttt_debug_log.txt");
+        Path log = GTG.getExternalStorageDirectory().toPath().resolve("ttt_debug_log.txt");
         DebugLogFile.log("first");
         DebugLogFile.log("second");
         check(Files.size(log) == 0, "debug file must buffer short adjacent messages");
@@ -84,6 +84,8 @@ public class DiagnosticsRegressionTest {
     public static void main(String[] args) throws Exception {
         Path directory = Files.createTempDirectory("ttt-diagnostic-test");
         Environment.directory = directory.toFile();
+        Path appFiles = Files.createDirectory(directory.resolve("app-files"));
+        GTG.externalFilesDirectory = appFiles.toFile();
         int failures = 0;
         try {
             for (int test = 0; test < 3; test++) {
@@ -101,7 +103,10 @@ public class DiagnosticsRegressionTest {
         } finally {
             GTG.prefs.writeFileLogDebug = false;
             DebugLogFile.log("close");
-            Files.deleteIfExists(directory.resolve("ttt_debug_log.txt"));
+            check(!Files.exists(directory.resolve("ttt_debug_log.txt")),
+                    "logging must not write the restricted shared-storage root");
+            Files.deleteIfExists(appFiles.resolve("ttt_debug_log.txt"));
+            Files.deleteIfExists(appFiles);
             Files.deleteIfExists(directory);
         }
         if (failures != 0) throw new AssertionError(failures + " diagnostic regressions failed");

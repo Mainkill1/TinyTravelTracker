@@ -614,6 +614,7 @@ public class ViewImage extends GTGActivity implements View.OnClickListener {
         intent.setAction(Intent.ACTION_SEND);
         intent.setType(image.getMimeType(getContentResolver()));
         intent.putExtra(Intent.EXTRA_STREAM, image.getUri(this));
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
             startActivity(Intent.createChooser(intent, getText(
                     isVideo ? R.string.sendVideo : R.string.sendImage)));
@@ -630,6 +631,7 @@ public class ViewImage extends GTGActivity implements View.OnClickListener {
         Intent intent = new Intent(
                 Intent.ACTION_VIEW);
         intent.setDataAndType(image.getUri(this), "video/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
             startActivity(intent);
         } catch (android.content.ActivityNotFoundException ex) {

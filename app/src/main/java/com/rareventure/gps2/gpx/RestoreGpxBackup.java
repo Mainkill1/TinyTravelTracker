@@ -19,26 +19,23 @@
 */
 package com.rareventure.gps2.gpx;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Environment;
-import androidx.core.content.ContextCompat;
+import android.net.Uri;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 
-import com.lamerman.FileDialog;
-import com.lamerman.SelectionMode;
 import com.rareventure.android.DbUtil;
 import com.rareventure.android.ProgressDialogActivity;
 import com.rareventure.android.database.DbDatastoreAccessor;
 import com.rareventure.gps2.GTG;
+import com.rareventure.gps2.CollectorServicePolicy;
 import com.rareventure.gps2.GpsTrailerDb;
 import com.rareventure.gps2.GpsTrailerDbProvider;
 import com.rareventure.gps2.GpsTrailerService;
@@ -85,17 +82,11 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 		public FileInfo(File file) {
 			this.file = file;
 			
-			if(file.toString().matches(".*\\.(?i:zip)"))
-			{
-				isZip = true;
-			}
-			else if(file.toString().matches(".*\\.(?i:gpx)"))
-			{
-			}
-			else
-				errorStr = getText(R.string.restore_gps_bad_file_ext);
-			
-			try {
+            try {
+                // Document providers may omit a filename extension; ZIP archives identify themselves.
+                try (InputStream header = new FileInputStream(file)) {
+                    isZip = header.read() == 'P' && header.read() == 'K';
+                }
 				if(isZip)
 				{
 					azfd = new AesZipFileDecrypter(file, new AESDecrypterBC());
@@ -116,6 +107,14 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 				return;
 			}
 		}
+
+        public void close() {
+            if (azfd != null) {
+                try { azfd.close(); }
+                catch (IOException e) { Log.w(GTG.TAG, "Unable to close backup archive", e); }
+                azfd = null;
+            }
+        }
 
 		private ExtZipEntry findZipEntry(String regex) throws IOException {
 			for(ExtZipEntry ze : azfd.getEntryList())
@@ -186,6 +185,10 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 					{
 						ZipEntry ze = zis.getNextEntry();
 						
+                        if (ze == null) {
+                            zis.close();
+                            throw new IOException("GPX entry missing from ZIP");
+                        }
 						if(ze.getName().equals(entry.getName()))
 							return zis;
 					}
@@ -199,8 +202,11 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 	private Pattern xmlPattern;
 	private Button restoreButton;
 	private FileInfo fileInfo;
+    private File selectedBackup;
 	private ValidateAndRestoreGpxBackupTask restoreTask;
+    private Task selectionTask;
 	private boolean isPaused = true;
+    private final RestoreCollectorRestart collectorRestart = new RestoreCollectorRestart();
 	
 	@Override
 	public void doOnCreate(Bundle b) {
@@ -208,7 +214,8 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 
 		setContentView(R.layout.restore_gpx_backup);
 
-		filenameView = (EditText) findViewById(R.id.filename);
+        filenameView = (EditText) findViewById(R.id.filename);
+        filenameView.setKeyListener(null);
 
 		filenameView.setOnClickListener(new View.OnClickListener() {
 			
@@ -236,23 +243,17 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 	}
 
 	private void checkChosenFile() {
-		if (filenameView.getText().toString().trim().isEmpty())
+        if (selectedBackup == null)
 			restoreButton.setEnabled(false);
 		else
 			restoreButton.setEnabled(true);
 	}
 
 	public void onRestoreButton(View view) {
-		String filename = filenameView.getText().toString().trim();
+        if (selectedBackup == null || selectionTask != null) return;
+        if (fileInfo != null) fileInfo.close();
+        fileInfo = new FileInfo(selectedBackup);
 
-		if (!filename.startsWith("/"))
-			filename = Environment.getExternalStorageDirectory() + "/"
-					+ filename;
-
-		final File f = new File(filename);
-
-		fileInfo = new FileInfo(f);
-		
 		if (fileInfo.hasError()) {
 			new AlertDialog.Builder(this)
 					.setCancelable(false)
@@ -318,7 +319,8 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 	@Override
 	public void doOnResume() {
 		super.doOnResume();
-		isPaused = false;
+        isPaused = false;
+        restartCollectorWhenVisible();
 		showRestoreCompleteMessage();		
 		
 	}
@@ -338,8 +340,9 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 		//Note that using singleTask doesn't help here because we are finishing the task regardless.
 		if(restoreTask != null)
 			restoreTask.cancel();
-		restoreTask = null;
-		
+        restoreTask = null;
+        if (selectionTask != null) selectionTask.cancel();
+        releaseSelectedBackup();
 		super.finish();
 	}
 
@@ -349,62 +352,77 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 
 		if(restoreTask != null)
 			restoreTask.cancel();
-		restoreTask = null;
+        restoreTask = null;
+        if (selectionTask != null) selectionTask.cancel();
+        releaseSelectedBackup();
 	}
 
-	public void onFileBrowserButton(View v) {
-		Intent intent = new Intent(getBaseContext(), FileDialog.class);
-		intent.putExtra(FileDialog.START_PATH, Environment
-				.getExternalStorageDirectory().toString());
+    private void releaseSelectedBackup() {
+        if (fileInfo != null) fileInfo.close();
+        fileInfo = null;
+        if (selectedBackup != null) selectedBackup.delete();
+        selectedBackup = null;
+    }
 
-		// can user select directories or not
-		intent.putExtra(FileDialog.CAN_SELECT_DIR, false);
+    public void onFileBrowserButton(View v) {
+        if (selectionTask != null) return;
+        startInternalActivityForResult(BackupDocuments.open(), REQUEST_BROWSE);
+    }
 
-		// alternatively you can set file filter
-		intent.putExtra(FileDialog.FORMAT_FILTER, new String[] { "zip", "gpx", "ZIP", "GPX" });
-		
-		intent.putExtra(FileDialog.SELECTION_MODE, SelectionMode.MODE_OPEN);
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_BROWSE) return;
+        final Uri document = BackupDocuments.selected(resultCode, data);
+        if (document == null || selectionTask != null) return; // Keep the previous selection when the user cancels.
+        restoreButton.setEnabled(false);
+        findViewById(R.id.fileBrowserButton).setEnabled(false);
+        runLongTask(selectionTask = new Task() {
+            private File staged;
+            private String name;
+            private Exception failure;
+            private final BackupCancellation cancellation = new BackupCancellation();
 
-		startInternalActivityForResult(intent, REQUEST_BROWSE);
-	}
+            @Override public void cancel() {
+                isCanceled = true;
+                cancellation.cancel();
+            }
 
-	@Override
-	public void onActivityResult(final int requestCode, int resultCode,
-			final Intent data) {
+            @Override public void doIt() {
+                try {
+                    name = BackupDocuments.displayName(getContentResolver(), document);
+                    staged = BackupDocumentStreams.stage(getContentResolver().openInputStream(document), getCacheDir(), name, cancellation);
+                } catch (IOException | SecurityException e) {
+                    failure = e;
+                }
+            }
 
-		if (resultCode == Activity.RESULT_OK) {
-
-			if (requestCode == REQUEST_BROWSE) {
-				File chosenFile = new File(data
-				.getStringExtra(FileDialog.RESULT_PATH));
-
-				File sdcardPath = Environment.getExternalStorageDirectory();
-				try {
-					String canonicalSdcardPath = sdcardPath.getCanonicalPath();
-					String canonicalChosenFile = chosenFile.getCanonicalPath();
-					
-					if(canonicalChosenFile.startsWith(canonicalSdcardPath))
-						//set canonicalChosenFile to be relative to the external storage directory, +1 for '/
-						canonicalChosenFile = canonicalChosenFile.substring(canonicalSdcardPath.length()+1);
-
-					filenameView.setText(canonicalChosenFile);
-				}
-				catch(IOException e)
-				{
-					Log.e(GTG.TAG,"Error finding canonical paths", e);
-					filenameView.setText(chosenFile.toString());
-				}
-					
-				checkChosenFile();
-			}
-
-		}
-		// else if (resultCode == Activity.RESULT_CANCELED) {
-		// Logger.getLogger(AccelerationChartRun.class.getName()).log(
-		// Level.WARNING, "file not selected");
-		// }
-
-	}
+            @Override public void doAfterFinish() {
+                selectionTask = null;
+                if (isFinishing() || isDestroyed()) {
+                    if (staged != null) staged.delete();
+                    return;
+                }
+                findViewById(R.id.fileBrowserButton).setEnabled(true);
+                checkChosenFile();
+                if (cancellation.isCancelled()) {
+                    if (staged != null) staged.delete();
+                    return;
+                }
+                if (failure != null) {
+                    Log.e(GTG.TAG, "Unable to read backup document", failure);
+                    new AlertDialog.Builder(RestoreGpxBackup.this).setTitle(R.string.error)
+                            .setMessage(R.string.restore_gpx_cannot_read_zip_file)
+                            .setNeutralButton(R.string.ok, null).show();
+                    return;
+                }
+                releaseSelectedBackup();
+                selectedBackup = staged;
+                filenameView.setText(name);
+                checkChosenFile();
+            }
+        }, true, true, R.string.restore_backup_dialog_title, R.string.restore_dialog_reading_backup_file);
+    }
 
 	public void onCancelButton(View v) {
 		finish();
@@ -490,7 +508,17 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 			
 			tl.advanceToNextTask(R.string.restore_dialog_reading_backup_file);
 		
-			try {
+            try {
+                // Parse the entire staged backup before stopping collection or replacing any tables.
+                try (InputStream validation = fileInfo.getBufferedInputStream(this, tl)) {
+                    if (validation == null || isCanceled) return;
+                    GpxReader.validateForRestore(validation, new Runnable() {
+                        @Override public void run() {
+                            if (isCanceled) throw new CanceledException();
+                        }
+                    });
+                }
+                if (isCanceled) return;
 				InputStream bis = fileInfo.getBufferedInputStream(this, tl);
 				if(bis == null) //if canceled
 					return;
@@ -621,6 +649,11 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 				return;
 			}
 			
+            finally {
+                try { is.close(); }
+                catch (IOException e) { Log.w(GTG.TAG, "Unable to close GPX input", e); }
+            }
+
 			//we might as well delete the user data keys that we are no longer using
 			GTG.db.execSQL("delete from USER_DATA_KEY where _id != "+GTG.crypt.userDataKeyId);
 			
@@ -666,13 +699,14 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 
 
 		@Override
-		public void doAfterFinish() {
+        public void doAfterFinish() {
+            if (fileInfo != null) fileInfo.close();
+            restoreTask = null;
 			GTG.setIsInRestore(false);
 			
-			//restart the gps service now that we're no longer restoring
-			ContextCompat.startForegroundService(RestoreGpxBackup.this,new Intent(RestoreGpxBackup.this,
-	                GpsTrailerService.class));
-	        
+            collectorRestart.completed();
+            restartCollectorWhenVisible();
+
 			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 			
 			if(isCanceled)
@@ -697,6 +731,15 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 
 	}
 	
+    private void restartCollectorWhenVisible() {
+        collectorRestart.startIfResumed(isPaused || isFinishing() || isDestroyed(),
+                new RestoreCollectorRestart.Starter() {
+                    @Override public boolean start() {
+                        return CollectorServicePolicy.startFromActivity(RestoreGpxBackup.this);
+                    }
+                });
+    }
+
 	private void showRestoreCompleteMessage() {
 		
 		if(!isRestoreCompletedAndNeedsMessage)
