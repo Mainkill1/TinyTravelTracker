@@ -96,6 +96,10 @@
            android:exported = "true"
            android:label="RestartWhenStopped">
 
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+
             <!--
             screen on and screen off intents will not fire from the manifest,
 		    neither will media mount for external apps, so we use user_present et al
