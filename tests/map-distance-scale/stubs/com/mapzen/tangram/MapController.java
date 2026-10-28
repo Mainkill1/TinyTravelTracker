@@ -1,0 +1,2 @@
+package com.mapzen.tangram;
+public class MapController { public void getCameraPosition(CameraPosition p) {} public void flyToCameraPosition(CameraPosition p,int n,Object o) {} public LngLat screenPositionToLngLat(android.graphics.PointF p) { return new LngLat(); } public void loadSceneFile(String s) {} public void loadSceneYaml(String s,String b,Object o) {} public void setMapChangeListener(MapChangeListener l) {} public TouchInput getTouchInput() { return new TouchInput(); } }

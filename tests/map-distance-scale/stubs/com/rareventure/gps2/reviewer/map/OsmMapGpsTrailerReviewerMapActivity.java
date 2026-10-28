@@ -1,0 +1,2 @@
+package com.rareventure.gps2.reviewer.map;
+public class OsmMapGpsTrailerReviewerMapActivity extends android.content.Context { public static final Preferences prefs=new Preferences(); public android.view.View findViewById(int id) { return new android.view.View(); } public static class Preferences { public int currTimePosSec,currTimePeriodSec; public double lastLon,lastLat; public float lastZoom; } }

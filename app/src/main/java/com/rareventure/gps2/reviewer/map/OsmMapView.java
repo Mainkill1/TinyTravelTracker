@@ -208,15 +208,17 @@ public class OsmMapView extends MapView implements MapView.MapReadyCallback {
 	}
 
 	/**
-	 * Returns the ratio of meters to pixels at the center of the screen
+	 * Returns meters per pixel at the center of the screen
      */
 	public double metersToPixels() {
 		//we need the lat, because the distance changes depending on location from equator
 		double screenCenterLat = screenTopLeft.latitude - screenSize.latitude / 2;
-		double metersToLon = 1/(Util.LON_TO_METERS_AT_EQUATOR *
-				Math.cos(screenCenterLat/ 180 * Math.PI));
+		// A degree of longitude covers less ground toward the poles. The legacy
+		// constant is degrees per meter at the equator, so multiply by cosine.
+		double metersPerDegreeLongitude = Math.cos(Math.toRadians(screenCenterLat)) /
+				Util.LON_TO_METERS_AT_EQUATOR;
 
-		return screenSize.longitude / windowWidth * metersToLon;
+		return screenSize.longitude / windowWidth * metersPerDegreeLongitude;
 	}
 
 	public synchronized AreaPanelSpaceTimeBox getCoordinatesRectangleForScreen() {
