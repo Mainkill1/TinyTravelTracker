@@ -14,7 +14,7 @@ public class GpsTrailerCacheCreator {
     public final HashMap<Integer, ViewLine> endTimeToViewLine = new HashMap<>();
     public final CountDownLatch paused = new CountDownLatch(1);
     public SuperThreadManager manager;
-    public ViewNode head = ViewNode.createHeadViewNode();
+    public ViewNode headVn = ViewNode.createHeadViewNode();
     public volatile int calls;
     public int pauseOnCall = 1;
     public int totalCalls = 20;
@@ -26,14 +26,14 @@ public class GpsTrailerCacheCreator {
             throw new AssertionError("overlay calculation requires cache read lock");
         viewNodeThreadManager.registerWritingThread();
         try {
-            head.status = ViewNode.VNStatus.SET;
-            head.stBox = box;
-            head.overlappingRange = new int[] {
+            headVn.status = ViewNode.VNStatus.SET;
+            headVn.stBox = box;
+            headVn.overlappingRange = new int[] {
                 Math.max(box.minZ, GTG.apCache.top.recordedStart),
                 Math.min(box.maxZ, GTG.apCache.top.recordedEnd)
             };
-            head.dirtyDescendents = calls + 1 < totalCalls ? 1 : 0;
-            if (calls == 0) partialHead = head;
+            headVn.dirtyDescendents = calls + 1 < totalCalls ? 1 : 0;
+            if (calls == 0) partialHead = headVn;
             if (shutdownOnFirstPass && calls == 0) manager.isShutdown = true;
             if (++calls == pauseOnCall) {
                 manager.pauseAllSuperThreads();
@@ -46,17 +46,10 @@ public class GpsTrailerCacheCreator {
             return calls < totalCalls ? CALC_VIEW_NODES_STILL_MORE_NODES_TO_CALC : 0;
         } finally { viewNodeThreadManager.unregisterWritingThread(); }
     }
-    public void discardViewNodes() {
-        viewNodeThreadManager.registerWritingThread();
-        try {
-            head = ViewNode.createHeadViewNode();
-            startTimeToViewLine.clear();
-            endTimeToViewLine.clear();
-        } finally { viewNodeThreadManager.unregisterWritingThread(); }
-    }
+    /* PRODUCTION_DISCARD_METHOD */
     public Iterator<ViewNode> getViewNodeIter() {
-        return head.status == ViewNode.VNStatus.SET
-                ? Collections.singletonList(head).iterator()
+        return headVn.status == ViewNode.VNStatus.SET
+                ? Collections.singletonList(headVn).iterator()
                 : Collections.<ViewNode>emptyList().iterator();
     }
     public static double calcTrDist(int start, int end, Object paths) { return 123; }

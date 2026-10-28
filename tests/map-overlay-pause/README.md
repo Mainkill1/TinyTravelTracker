@@ -2,9 +2,11 @@ Run `scripts/test-map-overlay-pause.sh` with JDK 17 (no Android SDK required).
 
 The harness compiles the actual `GpsTrailerOverlay`, `SuperThread`,
 `SuperThreadManager`, `ReadWriteThreadManager`, and `ViewNode`. Android UI,
-Tangram, and cache/database collaborators have small host stubs. The cache
-collaborator supplies refinement passes with a partially dirty real view node;
-the activity collaborator can request a pause after the first drawing round.
+Tangram, and cache/database collaborators have small host stubs. A small javac
+AST extractor inserts the exact production `discardViewNodes` method into the
+cache fixture, without rewriting its body. The cache collaborator supplies
+refinement passes with a partially dirty real view node; the activity
+collaborator can request a pause after the first drawing round.
 
 The five scenarios verify:
 
@@ -26,9 +28,10 @@ held fails the writer-access assertion instead. The corrected worker discards
 partial view state and returns through its existing cleanup, allowing the
 scheduler to pause with no cache locks and fresh locals on resume.
 
-The real cache producer and database traversal remain stubbed. The full Android
-build verifies the production cache reset API compiles; rendering, native
-Tangram behavior, database throughput, and elapsed pause latency still need
+Removing the head replacement or either line-index clear from the production
+`discardViewNodes` method makes the regression fail. The real cache producer and
+database traversal remain stubbed; rendering, native Tangram behavior, database
+throughput, and elapsed pause latency still need
 Android device validation. A cache calculation or drawing operation already in
 flight may finish before yielding; checkpoints bound further passes, not those
 operations' duration.

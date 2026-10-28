@@ -3,8 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 build_dir=$(mktemp -d)
 trap 'rm -rf "$build_dir"' EXIT
+javac -d "$build_dir" tests/map-overlay-pause/ExtractCacheDiscard.java
+java -cp "$build_dir" ExtractCacheDiscard \
+ app/src/main/java/com/rareventure/gps2/database/cachecreator/GpsTrailerCacheCreator.java \
+ tests/map-overlay-pause/GpsTrailerCacheCreator.java.fixture "$build_dir/GpsTrailerCacheCreator.java"
 mapfile -t stubs < <(find tests/map-overlay-pause/stubs -name '*.java' | sort)
 javac --release 8 -Xlint:-options -d "$build_dir" "${stubs[@]}" \
+ "$build_dir/GpsTrailerCacheCreator.java" \
  app/src/main/java/com/rareventure/android/SuperThread.java \
  app/src/main/java/com/rareventure/android/SuperThreadManager.java \
  app/src/main/java/com/rareventure/android/SortedBestOfIntArray.java \

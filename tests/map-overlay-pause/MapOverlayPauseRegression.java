@@ -57,8 +57,8 @@ public final class MapOverlayPauseRegression {
         try (Fixture fixture = new Fixture(60000, false)) {
             fixture.startAndAwaitPause();
             fixture.assertPausedWithoutLocks();
-            check(fixture.cache.head != fixture.cache.partialHead
-                    && fixture.cache.head.status == null,
+            check(fixture.cache.headVn != fixture.cache.partialHead
+                    && fixture.cache.headVn.status == null,
                     "pause must replace the partial known head with an unknown root");
             boolean rejectsDirtyHead = false;
             try { fixture.cache.partialHead.addPointToHead(10, 20, 20, 35, 0); }
@@ -73,8 +73,8 @@ public final class MapOverlayPauseRegression {
                         GTG.apCache.top.recordedEnd = 35;
                         // The production GPS writer only incrementally updates a known head.
                         // This is the real ViewNode assertion that rejects a dirty tree.
-                        if (fixture.cache.head.status != null)
-                            fixture.cache.head.addPointToHead(10, 20, 20, 35, 0);
+                        if (fixture.cache.headVn.status != null)
+                            fixture.cache.headVn.addPointToHead(10, 20, 20, 35, 0);
                     } finally { fixture.cache.viewNodeThreadManager.unregisterWritingThread(); }
                     AreaPanelSpaceTimeBox nextView = new AreaPanelSpaceTimeBox();
                     nextView.minZ = 30;
@@ -118,7 +118,7 @@ public final class MapOverlayPauseRegression {
             fixture.thread.start();
             fixture.thread.join(2000);
             check(!fixture.thread.isAlive(), "shutdown must finish the drawing round and exit");
-            check(fixture.cache.head.status == null,
+            check(fixture.cache.headVn.status == null,
                     "shutdown at the outer boundary must discard the partial view tree");
             check(!GTG.cacheCreatorLock.isReadingThreadsActive(),
                     "shutdown at a drawing boundary must release cache access");
@@ -140,6 +140,9 @@ public final class MapOverlayPauseRegression {
             GTG.cacheCreator = cache;
             cache.manager = manager;
             cache.delayPass = delayPass;
+            ViewLine previousLine = new ViewLine(10, 20);
+            cache.startTimeToViewLine.put(10, previousLine);
+            cache.endTimeToViewLine.put(20, previousLine);
             GpsTrailerOverlay.prefs.maxDrawCalcTime = drawBudget;
             overlay = new GpsTrailerOverlay(activity, thread, new OsmMapView());
             overlay.startTask(controller);
@@ -169,6 +172,8 @@ public final class MapOverlayPauseRegression {
                     "overlay must reach its manager's pause wait");
             check(cache.calls == 1,
                     "paused overlay calculated " + cache.calls + " passes; expected 1");
+            check(cache.startTimeToViewLine.isEmpty() && cache.endTimeToViewLine.isEmpty(),
+                    "discard must clear both old view-line indexes before releasing cache access");
             check(activity.distanceUpdates == 1,
                     "paused outer round must not begin another distance calculation");
             CountDownLatch wrote = new CountDownLatch(1);
