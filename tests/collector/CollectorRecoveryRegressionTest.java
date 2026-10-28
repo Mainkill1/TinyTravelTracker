@@ -78,6 +78,10 @@ public class CollectorRecoveryRegressionTest {
     job.onStartJob(new JobParameters());
     check(job.broadcasts == 1, "Live disabled preference prevents additional recovery broadcasts");
     assertCancelled(job, "Job sees unsaved live disabled preference");
+    android.os.Build.VERSION.SDK_INT=29;
+    context = state(true, true, true); context.background=false;
+    new GpsTrailerReceiver().onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+    check(ContextCompat.starts == 1, "Android 10 location FGS may recover without separate background grant");
     android.os.Build.VERSION.SDK_INT = 36;
     context = state(true, true, true);
     new GpsTrailerReceiver().onReceive(context, new Intent(context, GpsTrailerReceiver.class));

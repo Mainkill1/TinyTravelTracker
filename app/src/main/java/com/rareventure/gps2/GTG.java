@@ -1009,8 +1009,7 @@ public class GTG {
 	public static void notifyCollectDataServiceOfUpdate(Context context)
 	{
 		if(prefs.isCollectData)
-			ContextCompat.startForegroundService(context,new Intent(context,
-                GpsTrailerService.class));
+            CollectorServicePolicy.startFromActivity(context);
 		else
 			context.stopService(new Intent(context,
 	                GpsTrailerService.class));

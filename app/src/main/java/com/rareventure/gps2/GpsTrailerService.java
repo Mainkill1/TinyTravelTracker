@@ -383,7 +383,7 @@ public class GpsTrailerService extends Service {
         // Runtime location must be granted before promoting a location foreground service.
         if (!CollectorServicePolicy.isCollectionEnabled(this)
                 || !CollectorServicePolicy.hasPreciseLocation(this)) {
-            stopSelf();
+            stopUnstartedForegroundService();
             return;
         }
         updateNotification(FLAG_GPS_ENABLED, true);
@@ -594,8 +594,34 @@ public class GpsTrailerService extends Service {
         } catch (SecurityException | IllegalStateException e) {
             foregroundReady = false;
             Log.e(TAG, "Location foreground service cannot start; reopen app and check permissions", e);
-            stopSelf();
+            stopUnstartedForegroundService();
         }
+    }
+
+    private void stopUnstartedForegroundService() {
+        // A startForegroundService request still obliges promotion when grants/preferences
+        // change before onCreate. stopSelf alone can crash the process on modern Android.
+        final String channelId = "gpstrailer_channel";
+        if (Build.VERSION.SDK_INT >= 26) {
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(
+                    new NotificationChannel(channelId, "Tiny Travel Tracker", NotificationManager.IMPORTANCE_DEFAULT));
+        }
+        final Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.green)
+                .setContentTitle("Tiny Travel Tracker")
+                .setContentText("Recording stopped").build();
+        ForegroundStartup.stopUnstartedService(Build.VERSION.SDK_INT, new ForegroundStartup.Actions() {
+            @Override public void promote(int foregroundType) {
+                if (Build.VERSION.SDK_INT >= 29)
+                    startForeground(1, notification, foregroundType);
+                else
+                    startForeground(1, notification);
+            }
+            @Override public void stop() {
+                stopForeground(true);
+                stopSelf();
+            }
+        });
     }
 
 	@Override

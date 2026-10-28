@@ -47,7 +47,7 @@ public final class CollectorServicePolicy {
         if (!isCollectionEnabled(context) || !hasPreciseLocation(context)) return;
         if (GpsTrailerService.notifyIfRunning()) return;
         if (Build.VERSION.SDK_INT >= 31 && !bootCompleted) return;
-        if (Build.VERSION.SDK_INT >= 29 && ContextCompat.checkSelfPermission(context,
+        if (Build.VERSION.SDK_INT >= 30 && ContextCompat.checkSelfPermission(context,
                 "android.permission.ACCESS_BACKGROUND_LOCATION") != 0) return;
         start(context);
     }

@@ -83,7 +83,7 @@
         <service
             android:exported="false"
             android:name="com.rareventure.gps2.GpsTrailerService"
-            android:foregroundServiceType="location">
+            android:foregroundServiceType="location|shortService">
             <intent-filter>
                 <action android:name="com.rareventure.gps2.IGpsTrailerService" />
                 <!--
