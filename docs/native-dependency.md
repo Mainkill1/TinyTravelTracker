@@ -1,14 +1,15 @@
 # Tangram native dependency
 
-The app preserves Tangram ES 0.10.1's Java API and rebuilds its JNI libraries with
-Android NDK r28c. The official 2018 AAR bundles an ARM64 C++ runtime whose RELRO
+The app preserves Tangram ES 0.10.1's Java API, rebuilds its JNI libraries with
+Android NDK r28c, and repairs its system-font XML reader. The official 2018 AAR bundles an ARM64 C++ runtime whose RELRO
 protection overlaps writable data on a 16 KB page. Its large LOAD alignment alone
 does not establish compatibility.
 
 ## Rebuilding
 
 On Linux x86_64, install Git, curl, CMake, Ninja, Python 3, unzip, and sha256sum, then
-run:
+set `TANGRAM_JAVA_HOME` to Temurin JDK 17.0.17+10 and `ANDROID_HOME` to an Android
+SDK containing platform 36 revision 2, then run:
 
 ```sh
 scripts/build-tangram-16kb.sh
@@ -16,7 +17,10 @@ scripts/build-tangram-16kb.sh
 
 The script downloads checksum-pinned official inputs, checks out Tangram commit
 `3b0463a8bbbb3a3164593a93eeff5465d0b79360` (tag `0.10.1`), and initializes Android
-core submodules at their recorded commits. No upstream source patches are needed.
+core submodules at their recorded commits. Native source is unchanged. The Java
+source patch in `third_party/tangram/patches/font-axis.patch` reads font filenames
+while skipping nested `<axis>` metadata, which Android 16's variable fonts use.
+Both named families and fallback families use this reader; legacy XML is preserved.
 The NDK archive is r28c / `28.2.13676358`, SHA-256
 `dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f`.
 The original AAR SHA-256 is
@@ -29,9 +33,12 @@ paths. The original `armeabi-v7a`, `arm64-v8a` and `x86` ABIs are retained; `x86
 The rebuilt `libtangram.so` and NDK `libc++_shared.so` are stripped of unnecessary
 symbols; no ELF headers or segment contents are patched.
 
-Output: `.dependencies/tangram-android-0.10.1-16kb.aar`. The script prints its
-SHA-256. Java classes, resources, manifest, and consumer ProGuard rules remain
-byte-identical to the original AAR. The ZIP uses sorted entries, fixed timestamps,
+Output: `.dependencies/tangram-android-0.10.1-16kb-r2.aar`. The script prints its
+SHA-256. Only `com/mapzen/tangram/FontFileParser.class` changes inside `classes.jar`;
+it is compiled from the patched source with JDK 17.0.17, source/target 8, and no
+debug information. All other class/resource bytes, the manifest, and consumer
+ProGuard rules remain unchanged. The native libraries match release r1.
+The classes JAR and AAR ZIP use sorted entries, fixed timestamps,
 fixed permissions, and stored compression so packaging is independent of zlib.
 
 Build cache defaults to
@@ -42,6 +49,14 @@ variables:
 - `TANGRAM_JOBS`: parallel compiler jobs, default 4.
 - `ANDROID_NDK_HOME`: an existing NDK r28c installation; otherwise the script
   downloads the pinned Linux archive into its cache.
+- `TANGRAM_JAVA_HOME`: JDK 17.0.17 installation (defaults to `JAVA_HOME`).
+- `ANDROID_HOME` (or `ANDROID_SDK_ROOT`): SDK containing platform 36 revision 2.
+
+The platform's `android.jar` SHA-256 is
+`d9eb9da824d9e247a352f570f01e1169e725b2954bca9e283a71786c59b59f9a`.
+Compilation also uses the checksum-pinned official support-annotations 27.1.1 JAR;
+it adds no classes to the resulting AAR. The official classes JAR supplies the
+remaining Tangram API on the compilation classpath.
 
 The verified build used CMake 3.31.6, Ninja 1.12.1, and Python 3.13.5. Keep these
 versions when reproducing a published artifact checksum; a different host tool
@@ -52,7 +67,8 @@ library; repeating the complete packaging also produced an identical AAR.
 ## Verification
 
 ```sh
-python3 scripts/check-native-alignment.py .dependencies/tangram-android-0.10.1-16kb.aar
+scripts/test-tangram-fonts.sh
+python3 scripts/check-native-alignment.py .dependencies/tangram-android-0.10.1-16kb-r2.aar
 python3 scripts/check-native-alignment.py app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -66,7 +82,16 @@ even if its end is not aligned, provided no mutable data shares the rounded page
 The official AAR fails this check; the rebuilt AAR passes. The 59 exported JNI
 functions match the original library for all three original ABIs. Packaging checks also
 verify all eight expected native libraries, ZIP integrity, and unchanged upstream
-Java/resources.
+classes/resources other than the one rebuilt parser class.
+
+The font regression fixture runs the actual packaged parser with genuine KXml2
+(checksum-pinned 2.3.0) and small Android boundary doubles. It covers variable
+axes, surrounding filename whitespace, subsequent fonts/families, fallback axes,
+aliases, classic font XML, and pre-Lollipop XML. Passing the official or r1 AAR to
+`scripts/test-tangram-fonts.sh PATH.aar` reproduces the original `nextText()` failure.
+`FontFileParserTest` additionally reads the device's actual `/system/etc/fonts.xml`
+to completion and verifies default, italic, and fallback font files exist. Its
+direct call to the reader makes XML exceptions fail the test.
 
 The final APK still requires AGP packaging that aligns uncompressed native
 libraries. Check it with SDK Build Tools 35 or newer:
@@ -84,6 +109,8 @@ runtime check.
 
 Each rebuilt AAR includes `META-INF/tangram-rebuild.json` with exact source and
 submodule revisions, toolchain version, source AAR checksum, ABIs, and API level.
+It also records the Java patch/source/class checksums and compiler/SDK inputs.
+The exact source patch is included under `META-INF/tangram-patches`.
 Upstream licenses and NDK notices are included under `META-INF/tangram-licenses`.
 The omitted FreeType 2.7 license and required binary attribution are supplied in
 [`third_party/tangram`](../third_party/tangram/NOTICE.txt).

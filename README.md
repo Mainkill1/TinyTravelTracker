@@ -39,7 +39,8 @@ V 1.1.49-alpha.3 (build 94) - 2026 Oct 28
 Android 16 target and AndroidX migration; explicit GPS provider registration and
 foreground location service support; registration/last-fix diagnostics; document
 picker backups with validation before restoring history; source-rebuilt map
-libraries with 16 KB native layout checks. OnePlus 15 physical GPS confirmation
+libraries with 16 KB native layout checks and a current Android font XML reader.
+OnePlus 15 physical GPS confirmation
 remains outstanding. See BUILDING.md for verification scope and runtime limits.
 
 V 1.1.48 (build 91) - 2019 Sep 10

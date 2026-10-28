@@ -2,9 +2,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-readonly artifact='.dependencies/tangram-android-0.10.1-16kb.aar'
-readonly checksum='318cc7e61f598c1a63cf0b96378ddd09f871b76e79172945182c8367c1e37622'
-readonly url='https://github.com/Mainkill1/TinyTravelTracker/releases/download/tangram-0.10.1-16kb-r1/tangram-android-0.10.1-16kb.aar'
+readonly artifact='.dependencies/tangram-android-0.10.1-16kb-r2.aar'
+readonly checksum='a9037580d9284d89703ba6e038993ebe25fa5538aed1a0d672aa6c06cfb86516'
+readonly url='https://github.com/Mainkill1/TinyTravelTracker/releases/download/tangram-0.10.1-16kb-r2/tangram-android-0.10.1-16kb-r2.aar'
 
 verify() {
     printf '%s  %s\n' "$checksum" "$1" | sha256sum --check --status

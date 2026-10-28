@@ -7,12 +7,16 @@ import subprocess
 import sys
 import zipfile
 
-source, ndk, build, official, output = map(pathlib.Path, sys.argv[1:])
+source, ndk, build, official, output, java = map(pathlib.Path, sys.argv[1:])
 abis = {'armeabi-v7a': 'arm-linux-androideabi', 'arm64-v8a': 'aarch64-linux-android',
         'x86': 'i686-linux-android', 'x86_64': 'x86_64-linux-android'}
 with zipfile.ZipFile(official) as archive:
     entries = {name: archive.read(name) for name in archive.namelist()
                if not name.startswith('jni/') and not name.endswith('/')}
+entries['classes.jar'] = (java / 'classes.jar').read_bytes()
+entries['META-INF/tangram-patches/font-axis.patch'] = (
+    pathlib.Path(__file__).resolve().parent.parent / 'third_party/tangram/patches/font-axis.patch'
+).read_bytes()
 for abi, triple in abis.items():
     entries[f'jni/{abi}/libtangram.so'] = (build / abi / 'libtangram.so').read_bytes()
     entries[f'jni/{abi}/libc++_shared.so'] = (build / abi / 'libc++_shared.so').read_bytes()
@@ -40,6 +44,7 @@ entries['META-INF/tangram-rebuild.json'] = (json.dumps({
     'upstream_aar_sha256': hashlib.sha256(official.read_bytes()).hexdigest(),
     'ndk': '28.2.13676358', 'android_api': 21, 'cxx_standard': 14,
     'page_size': 16384, 'abis': list(abis), 'submodules': submodule_revisions,
+    'java_rebuild': json.loads((java / 'provenance.json').read_text()),
 }, indent=2, sort_keys=True) + '\n').encode()
 # Stored entries avoid host zlib variation. AGP controls final APK compression/alignment.
 temporary = output.with_suffix('.aar.tmp')

@@ -15,11 +15,12 @@ distribution checksum before running.
 [upstream's versioned Android README](https://github.com/tangrams/tangram-es/blob/0.10.1/platforms/android/README.md).
 It no longer resolves from the project's repositories. We rebuild its native
 libraries from the exact upstream source with NDK r28c for 16 KB page support,
-retaining the original Java classes/resources and ABIs, and adding x86_64.
+retaining the renderer API/resources and original ABIs, and adding x86_64.
+The Java font reader has a source patch for current Android variable-font XML.
 
 - Source tag: `0.10.1`, commit `3b0463a8bbbb3a3164593a93eeff5465d0b79360`
-- Rebuilt release: https://github.com/Mainkill1/TinyTravelTracker/releases/tag/tangram-0.10.1-16kb-r1
-- Rebuilt AAR SHA-256: `318cc7e61f598c1a63cf0b96378ddd09f871b76e79172945182c8367c1e37622`
+- Rebuilt release: https://github.com/Mainkill1/TinyTravelTracker/releases/tag/tangram-0.10.1-16kb-r2
+- Rebuilt AAR SHA-256: `a9037580d9284d89703ba6e038993ebe25fa5538aed1a0d672aa6c06cfb86516`
 
 `scripts/fetch-tangram.sh` downloads the pinned rebuilt artifact into ignored
 `.dependencies/` and verifies its checksum. Gradle independently verifies it.

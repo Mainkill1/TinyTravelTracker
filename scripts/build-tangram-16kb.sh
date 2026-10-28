@@ -8,7 +8,7 @@ readonly official_sha='88ef5803f006bb5e1d84409f615dddb034bbd7afe8b9e5681053b4372
 readonly ndk_sha='dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f'
 readonly cache="${TANGRAM_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/tiny-travel-tracker/tangram-16kb-r1}"
 readonly source="$cache/source"
-readonly output="$root/.dependencies/tangram-android-0.10.1-16kb.aar"
+readonly output="$root/.dependencies/tangram-android-0.10.1-16kb-r2.aar"
 readonly official="$cache/tangram-android-0.10.1.aar"
 
 for tool in git curl cmake ninja python3 unzip sha256sum; do
@@ -27,6 +27,11 @@ download() {
 }
 
 download 'https://github.com/tangrams/tangram-es/releases/download/0.10.1/tangram-android-0.10.1.aar' "$official" "$official_sha"
+readonly java_home="${TANGRAM_JAVA_HOME:-${JAVA_HOME:-}}"
+readonly android_sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+[[ -n $java_home && -n $android_sdk ]] || { echo 'Set TANGRAM_JAVA_HOME to JDK17.0.17 and ANDROID_HOME to the SDK with platform36 revision2.' >&2; exit 1; }
+download 'https://dl.google.com/dl/android/maven2/com/android/support/support-annotations/27.1.1/support-annotations-27.1.1.jar' \
+    "$cache/support-annotations-27.1.1.jar" '3365960206c3d2b09e845f555e7f88f8effc8d2f00b369e66c4be384029299cf'
 if [[ -n ${ANDROID_NDK_HOME:-} ]]; then
     ndk=$ANDROID_NDK_HOME
 else
@@ -77,6 +82,8 @@ for abi in armeabi-v7a arm64-v8a x86 x86_64; do
     "$toolchain/bin/llvm-strip" --strip-unneeded "$build/libc++_shared.so"
 done
 
-python3 "$root/scripts/package-tangram-16kb.py" "$source" "$ndk" "$cache/build" "$official" "$output"
+python3 "$root/scripts/compile-tangram-font-parser.py" "$source" "$official" \
+    "$cache/support-annotations-27.1.1.jar" "$android_sdk" "$java_home" "$cache/java-r2"
+python3 "$root/scripts/package-tangram-16kb.py" "$source" "$ndk" "$cache/build" "$official" "$output" "$cache/java-r2"
 python3 "$root/scripts/check-native-alignment.py" "$output"
 sha256sum "$output"
