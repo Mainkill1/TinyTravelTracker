@@ -8,6 +8,9 @@ jobs:
   emulator:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      ANDROID_USER_HOME: ${{ runner.temp }}/ttt-android
+      ANDROID_AVD_HOME: ${{ runner.temp }}/ttt-android/avd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -23,7 +26,9 @@ jobs:
       - name: Boot Android 16
         run: |
           sudo chmod a+rw /dev/kvm
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd -n ttt -k 'system-images;android-36;google_apis;x86_64' --device pixel_6
+          test -f "$ANDROID_AVD_HOME/ttt.ini"
           "$ANDROID_HOME/emulator/emulator" -avd ttt -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/ttt-emulator.log 2>&1 &
           trap 'cat /tmp/ttt-emulator.log' EXIT
           timeout 120 adb wait-for-device
