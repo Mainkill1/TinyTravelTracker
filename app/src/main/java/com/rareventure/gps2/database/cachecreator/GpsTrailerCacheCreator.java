@@ -751,12 +751,12 @@ public class GpsTrailerCacheCreator extends Thread {
 					//if there are threads waiting to run, now is a good time to do it, since
 					//we're at a discrete point of creating the apcaches
 					//
-					//Note that the drawer thread won't give up its reading lock until the view
-					//is completely up to date, so we don't have to worry about the viewnodes
-					//being half updated
+					// The drawer retains its reading lock until refinement is complete, or
+					// discards the partial tree before yielding for a lifecycle pause. Thus
+					// the writer sees a clean view tree or an unknown head to rebuild later.
 					GTG.cacheCreatorLock.pauseForReadingThreads();
 					
-					//note, we can use the headVn stbox because all vn's should be clean by this point
+					// A known head is clean here; a discarded head has no stBox yet.
 					//this is used strictly to populate the viewnode tree
 					int minDepth = headVn.stBox == null ? 0 : GpsTrailerOverlay.getMinDepth(headVn.stBox);
 					
@@ -1010,6 +1010,23 @@ public class GpsTrailerCacheCreator extends Thread {
 		viewNodeThreadManager.unregisterWritingThread();
 
 		return true;
+	}
+
+	/**
+	 * Discard a partially refined view before releasing cache access for a pause.
+	 * Caller must hold cacheCreatorLock. An unknown head makes the GPS writer
+	 * leave view reconstruction to calcViewableNodes after resume.
+	 */
+	public void discardViewNodes() {
+		viewNodeThreadManager.registerWritingThread();
+		try {
+			headVn = ViewNode.createHeadViewNode();
+			startTimeToViewLine.clear();
+			endTimeToViewLine.clear();
+		}
+		finally {
+			viewNodeThreadManager.unregisterWritingThread();
+		}
 	}
 
 	/**

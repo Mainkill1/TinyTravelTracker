@@ -196,8 +196,11 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 
 			long timeStartedDrawingMs = System.currentTimeMillis();
 
-			while((!allLinesCalculated || stillMoreNodesToCalc) && !superThread.manager.isShutdown)
+			while(!allLinesCalculated || stillMoreNodesToCalc)
 			{
+				if(yieldForLifecycleIfNecessary())
+					return;
+
 				if(System.currentTimeMillis() - timeStartedDrawingMs > MAX_TIME_DRAWING_BEFORE_DISPLAY_NOTICE_MS)
 					activity.notifyProcessing(OngoingProcessEnum.DRAW_POINTS);
 
@@ -240,6 +243,8 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 				while(System.currentTimeMillis() - startTime < prefs.maxDrawCalcTime
 						&& stillMoreNodesToCalc)
 				{
+					if(yieldForLifecycleIfNecessary())
+						return;
 					int status = GTG.cacheCreator.calcViewableNodes(localApStbox, minDepth,
 							earliestOnScreenPointSec, latestOnScreenPointSec);
 
@@ -314,6 +319,24 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 			activity.notifyDoneProcessing(OngoingProcessEnum.DRAW_POINTS);
 
 		}
+	}
+
+	/** Discard partial refinement before returning to the scheduler's lifecycle gate.
+	 * The GPS writer can only update a clean tree or an unknown head. doWork's
+	 * finally releases cache access before the scheduler waits for resume.
+	 */
+	private boolean yieldForLifecycleIfNecessary() {
+		if(!superThread.manager.isPauseOrShutdownRequested())
+			return false;
+
+		GTG.cacheCreator.discardViewNodes();
+		minTimeTreeLengthForLineCalc = Integer.MAX_VALUE;
+		lastNumberOfViewNodesLinesCalculatedFor = Integer.MAX_VALUE;
+		synchronized(this) {
+			viewUpToDate = false;
+			distanceUpToDate = false;
+		}
+		return true;
 	}
 
 	private boolean isAtMaxLines() {
