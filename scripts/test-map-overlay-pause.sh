@@ -10,6 +10,7 @@ javac --release 8 -Xlint:-options -d "$build_dir" "${stubs[@]}" \
  app/src/main/java/com/rareventure/android/SortedBestOfIntArray.java \
  app/src/main/java/com/rareventure/util/MultiValueHashMap.java \
  app/src/main/java/com/rareventure/util/ReadWriteThreadManager.java \
+ app/src/main/java/com/rareventure/gps2/database/cachecreator/ViewNode.java \
  app/src/main/java/com/rareventure/gps2/reviewer/map/GpsOverlay.java \
  app/src/main/java/com/rareventure/gps2/reviewer/map/GpsTrailerOverlay.java \
  tests/map-overlay-pause/MapOverlayPauseRegression.java

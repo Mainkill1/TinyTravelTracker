@@ -196,9 +196,10 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 
 			long timeStartedDrawingMs = System.currentTimeMillis();
 
-			while((!allLinesCalculated || stillMoreNodesToCalc) && !superThread.manager.isShutdown)
+			while(!allLinesCalculated || stillMoreNodesToCalc)
 			{
-				pauseBetweenCalculationPasses();
+				if(yieldForLifecycleIfNecessary())
+					return;
 
 				if(System.currentTimeMillis() - timeStartedDrawingMs > MAX_TIME_DRAWING_BEFORE_DISPLAY_NOTICE_MS)
 					activity.notifyProcessing(OngoingProcessEnum.DRAW_POINTS);
@@ -242,7 +243,8 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 				while(System.currentTimeMillis() - startTime < prefs.maxDrawCalcTime
 						&& stillMoreNodesToCalc)
 				{
-					pauseBetweenCalculationPasses();
+					if(yieldForLifecycleIfNecessary())
+						return;
 					int status = GTG.cacheCreator.calcViewableNodes(localApStbox, minDepth,
 							earliestOnScreenPointSec, latestOnScreenPointSec);
 
@@ -319,18 +321,22 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 		}
 	}
 
-	/** Check lifecycle state only after releasing cache access, so a background map
-	 * cannot keep the cache writer waiting. Neither boundary holds a view-node lock.
+	/** Discard partial refinement before returning to the scheduler's lifecycle gate.
+	 * The GPS writer can only update a clean tree or an unknown head. doWork's
+	 * finally releases cache access before the scheduler waits for resume.
 	 */
-	private void pauseBetweenCalculationPasses() {
-		GTG.cacheCreatorLock.unregisterReadingThread();
-		try {
-			abortOrPauseIfNecessary();
+	private boolean yieldForLifecycleIfNecessary() {
+		if(!superThread.manager.isPauseOrShutdownRequested())
+			return false;
+
+		GTG.cacheCreator.discardViewNodes();
+		minTimeTreeLengthForLineCalc = Integer.MAX_VALUE;
+		lastNumberOfViewNodesLinesCalculatedFor = Integer.MAX_VALUE;
+		synchronized(this) {
+			viewUpToDate = false;
+			distanceUpToDate = false;
 		}
-		finally {
-			// Keep doWork's read registration balanced, including shutdown exceptions.
-			GTG.cacheCreatorLock.registerReadingThread();
-		}
+		return true;
 	}
 
 	private boolean isAtMaxLines() {

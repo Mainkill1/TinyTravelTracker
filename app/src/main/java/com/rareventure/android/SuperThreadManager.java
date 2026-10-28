@@ -105,6 +105,11 @@ public class SuperThreadManager {
 		else notifiedObjects.add(o);
 	}
 
+	/** Whether a running task should release its resources and return to the scheduler. */
+	public synchronized boolean isPauseOrShutdownRequested() {
+		return isPaused || isShutdown;
+	}
+
 	public void pauseAllSuperThreads()
 	{
 		synchronized (this)

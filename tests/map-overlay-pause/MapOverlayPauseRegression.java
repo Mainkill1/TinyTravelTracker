@@ -18,8 +18,10 @@ public final class MapOverlayPauseRegression {
     public static void main(String[] args) throws Exception {
         pauseWithinRefinementBatch();
         pauseBetweenDrawingRounds();
+        newGpsAndRequestedViewWhilePaused();
         shutdownWhilePaused();
-        System.out.println("Map overlay pause regressions passed (3 scenarios)");
+        shutdownAtDrawingBoundary();
+        System.out.println("Map overlay pause regressions passed (5 scenarios)");
     }
 
     private static void pauseWithinRefinementBatch() throws Exception {
@@ -35,8 +37,8 @@ public final class MapOverlayPauseRegression {
             check(fixture.overlay.earliestOnScreenPointSec == 10
                     && fixture.overlay.latestOnScreenPointSec == 20,
                     "resume must preserve the visible time range");
-            check(fixture.activity.distanceUpdates == 1,
-                    "pause/resume must not repeat an up-to-date distance calculation");
+            check(fixture.activity.distanceUpdates == 2,
+                    "resume must refresh distance after discarding the paused view");
         }
     }
 
@@ -51,6 +53,52 @@ public final class MapOverlayPauseRegression {
         }
     }
 
+    private static void newGpsAndRequestedViewWhilePaused() throws Exception {
+        try (Fixture fixture = new Fixture(60000, false)) {
+            fixture.startAndAwaitPause();
+            fixture.assertPausedWithoutLocks();
+            check(fixture.cache.head != fixture.cache.partialHead
+                    && fixture.cache.head.status == null,
+                    "pause must replace the partial known head with an unknown root");
+            boolean rejectsDirtyHead = false;
+            try { fixture.cache.partialHead.addPointToHead(10, 20, 20, 35, 0); }
+            catch (AssertionError expected) { rejectsDirtyHead = true; }
+            check(rejectsDirtyHead, "fixture must retain the actual dirty-tree writer assertion");
+            AtomicReference<Throwable> writerFailure = new AtomicReference<>();
+            Thread writer = new Thread(() -> {
+                GTG.cacheCreatorLock.registerWritingThread();
+                try {
+                    fixture.cache.viewNodeThreadManager.registerWritingThread();
+                    try {
+                        GTG.apCache.top.recordedEnd = 35;
+                        // The production GPS writer only incrementally updates a known head.
+                        // This is the real ViewNode assertion that rejects a dirty tree.
+                        if (fixture.cache.head.status != null)
+                            fixture.cache.head.addPointToHead(10, 20, 20, 35, 0);
+                    } finally { fixture.cache.viewNodeThreadManager.unregisterWritingThread(); }
+                    AreaPanelSpaceTimeBox nextView = new AreaPanelSpaceTimeBox();
+                    nextView.minZ = 30;
+                    nextView.maxZ = 40;
+                    fixture.overlay.notifyScreenChanged(nextView);
+                } catch (Throwable throwable) { writerFailure.set(throwable); }
+                finally { GTG.cacheCreatorLock.unregisterWritingThread(); }
+            }, "gps-writer-during-map-pause");
+            writer.setDaemon(true);
+            writer.start();
+            writer.join(2000);
+            check(!writer.isAlive(), "GPS writer must finish while the map stays paused");
+            check(writerFailure.get() == null,
+                    "GPS writer rejected partial view tree: " + writerFailure.get());
+            fixture.manager.resumeAllSuperThreads();
+            fixture.awaitFinishedDrawing();
+            check(fixture.overlay.earliestOnScreenPointSec == 30
+                    && fixture.overlay.latestOnScreenPointSec == 35,
+                    "resume must rebuild the requested view from the newly recorded GPS range");
+            check(fixture.activity.distanceUpdates == 2,
+                    "resume must recalculate distance for the newly requested time range");
+        }
+    }
+
     private static void shutdownWhilePaused() throws Exception {
         try (Fixture fixture = new Fixture(60000, false)) {
             fixture.startAndAwaitPause();
@@ -59,6 +107,21 @@ public final class MapOverlayPauseRegression {
             check(fixture.cache.calls == 1, "shutdown must not start more refinement passes");
             check(!GTG.cacheCreatorLock.isReadingThreadsActive(),
                     "shutdown must release the restored cache read registration");
+        }
+    }
+
+    private static void shutdownAtDrawingBoundary() throws Exception {
+        try (Fixture fixture = new Fixture(50, true)) {
+            fixture.cache.pauseOnCall = 0;
+            fixture.activity.afterDraw = () -> {};
+            fixture.cache.shutdownOnFirstPass = true;
+            fixture.thread.start();
+            fixture.thread.join(2000);
+            check(!fixture.thread.isAlive(), "shutdown must finish the drawing round and exit");
+            check(fixture.cache.head.status == null,
+                    "shutdown at the outer boundary must discard the partial view tree");
+            check(!GTG.cacheCreatorLock.isReadingThreadsActive(),
+                    "shutdown at a drawing boundary must release cache access");
         }
     }
 
@@ -72,6 +135,7 @@ public final class MapOverlayPauseRegression {
         final AtomicReference<Throwable> failure = new AtomicReference<>();
 
         Fixture(long drawBudget, boolean delayPass) {
+            GTG.apCache = new GTG.ApCache();
             GTG.cacheCreatorLock = new ReadWriteThreadManager();
             GTG.cacheCreator = cache;
             cache.manager = manager;

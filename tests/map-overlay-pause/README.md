@@ -1,24 +1,34 @@
 Run `scripts/test-map-overlay-pause.sh` with JDK 17 (no Android SDK required).
 
 The harness compiles the actual `GpsTrailerOverlay`, `SuperThread`,
-`SuperThreadManager`, and `ReadWriteThreadManager`. Android UI, Tangram, and
-cache/database collaborators have small host stubs. The cache collaborator
-provides 20 refinement passes and can request a pause during the first pass;
+`SuperThreadManager`, `ReadWriteThreadManager`, and `ViewNode`. Android UI,
+Tangram, and cache/database collaborators have small host stubs. The cache
+collaborator supplies refinement passes with a partially dirty real view node;
 the activity collaborator can request a pause after the first drawing round.
 
-The scenarios verify:
+The five scenarios verify:
 
 - A pause stops the next refinement inside a long redraw batch.
-- A pause after a drawing round stops the next outer round.
+- A pause after a drawing round stops the next outer round and distance work.
 - Actual cache and view-node writers acquire their locks while the map is paused.
 - Resume completes calculation, draws the location point with the existing
-  corner markers, retains the visible time range, and avoids repeating distance.
-- Shutdown wakes a paused worker, exits without more calculation, and releases
-  cache access.
+  corner markers, retains the visible time range, and refreshes distance.
+- A GPS writer while paused sees a fresh unknown head, while the discarded real
+  `ViewNode` rejects incremental updates because it is dirty. New GPS data and a
+  changed requested view are reflected in the resumed output.
+- Shutdown wakes a paused worker, and shutdown during a drawing round discards
+  the partial tree before releasing cache access.
 
-The original code fails by running all 20 refinement passes after pause.
-Waiting at either checkpoint while holding cache access also fails the writer
-assertion. Rendering, native Tangram behavior, database throughput, and elapsed
-pause latency on an Android device still need device-level validation. A single
-cache calculation or drawing operation already in flight may finish before
-pausing; the checkpoints bound further passes, not those operations' duration.
+The original code runs all refinement passes after pause. Simply dropping its
+read registration lets a cache writer reach the real `ViewNode.addPointToHead`
+assertion: incremental updates require a clean tree. Waiting with cache access
+held fails the writer-access assertion instead. The corrected worker discards
+partial view state and returns through its existing cleanup, allowing the
+scheduler to pause with no cache locks and fresh locals on resume.
+
+The real cache producer and database traversal remain stubbed. The full Android
+build verifies the production cache reset API compiles; rendering, native
+Tangram behavior, database throughput, and elapsed pause latency still need
+Android device validation. A cache calculation or drawing operation already in
+flight may finish before yielding; checkpoints bound further passes, not those
+operations' duration.
