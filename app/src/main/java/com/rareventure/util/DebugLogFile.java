@@ -1,6 +1,5 @@
 package com.rareventure.util;
 
-import android.os.Environment;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -8,6 +7,7 @@ import com.rareventure.gps2.GTG;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 
@@ -52,12 +52,13 @@ public class DebugLogFile {
         if (triedOpeningAlready) return false;
         triedOpeningAlready = true;
         try {
-            debugOut = new BufferedWriter(new FileWriter(
-                    Environment.getExternalStorageDirectory() + "/ttt_debug_log.txt", true));
+            File directory = GTG.getExternalStorageDirectory();
+            if (directory == null) throw new IOException("App storage is unavailable");
+            debugOut = new BufferedWriter(new FileWriter(new File(directory, "ttt_debug_log.txt"), true));
             lastFlushMs = SystemClock.elapsedRealtime();
             return true;
         } catch (IOException e) {
-            Log.e(GTG.TAG, "Couldn't open /sdcard/ttt_debug_log.txt", e);
+            Log.e(GTG.TAG, "Couldn't open app diagnostic log", e);
             return false;
         }
     }
