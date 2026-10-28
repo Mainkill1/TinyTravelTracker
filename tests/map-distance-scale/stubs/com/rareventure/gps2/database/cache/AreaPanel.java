@@ -1,0 +1,1 @@
+package com.rareventure.gps2.database.cache; public class AreaPanel { public static int convertLonToX(double n) { return 0; } public static int convertLatToY(double n) { return 0; } public static double convertXToLon(int n) { return 0; } public static double convertYToLat(int n) { return 0; } }

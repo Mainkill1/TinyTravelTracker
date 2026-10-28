@@ -1,0 +1,1 @@
+package com.rareventure.gps2.reviewer.map; public class MyMapController extends com.mapzen.tangram.MapController { public MyMapController(android.content.Context c) {} public void setupTouchListener() {} public void setLongPressResponderExt(MyTouchInput.LongPressResponder r) {} }

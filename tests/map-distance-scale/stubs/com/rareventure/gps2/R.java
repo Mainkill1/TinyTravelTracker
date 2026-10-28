@@ -1,0 +1,1 @@
+package com.rareventure.gps2; public class R { public static class id { public static final int main_window_area=0; } public static class string { public static final int BUBBLE_WRAP_MAP_STYLE_DESC=0,CINNABAR_MAP_STYLE_DESC=1,CINNABAR_LARGE_MAP_STYLE_DESC=2,REFILL_MAP_STYLE_DESC=3,TRON_MAP_STYLE_DESC=4,WALKABOUT_MAP_STYLE_DESC=5; } }

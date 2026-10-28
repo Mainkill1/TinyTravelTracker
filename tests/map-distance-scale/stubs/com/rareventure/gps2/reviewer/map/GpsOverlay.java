@@ -1,0 +1,2 @@
+package com.rareventure.gps2.reviewer.map;
+public interface GpsOverlay { void notifyScreenChanged(com.rareventure.gps2.database.cache.AreaPanelSpaceTimeBox b); default void onLongPressCancel() {} void onPause(); void onResume(); void onTap(float x,float y); void onLongPressEnd(float a,float b,float c,float d); void onLongPressMove(float a,float b,float c,float d); void startTask(com.mapzen.tangram.MapController c); }
