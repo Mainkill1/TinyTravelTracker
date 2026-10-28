@@ -1,25 +1,14 @@
 package com.rareventure.gps2.reviewer.map;
 
 import android.content.Context;
-import android.os.SystemClock;
 import android.view.GestureDetector;
-import android.view.GestureDetector.OnDoubleTapListener;
-import android.view.GestureDetector.OnGestureListener;
 import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
-import android.view.ScaleGestureDetector.OnScaleGestureListener;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.ViewConfiguration;
 
-import com.almeros.android.multitouch.RotateGestureDetector;
-import com.almeros.android.multitouch.RotateGestureDetector.OnRotateGestureListener;
-import com.almeros.android.multitouch.ShoveGestureDetector;
-import com.almeros.android.multitouch.ShoveGestureDetector.OnShoveGestureListener;
 import com.mapzen.tangram.TouchInput;
 
-import java.util.EnumMap;
-import java.util.EnumSet;
 
 /**
  * {@code TouchInput} collects touch data, applies gesture detectors, resolves simultaneous
@@ -28,6 +17,7 @@ import java.util.EnumSet;
 public class MyTouchInput implements OnTouchListener {
 
     private boolean longPressActive;
+    private View touchView;
 
     /**
      * This is used to detect long presses. It is the same as panTapGestureDetector, but with
@@ -71,38 +61,55 @@ public class MyTouchInput implements OnTouchListener {
 
     public void onLongPress(MotionEvent e) {
         longPressActive = true;
-         if (longPressResponder != null) {
-             longPressResponder.onLongPress(e.getX(), e.getY());
-         }
-
+        // End Tangram's stream as soon as custom selection takes ownership, so
+        // its detectors cannot later interpret the release as a tap or fling.
+        MotionEvent cancel = MotionEvent.obtain(e);
+        cancel.setAction(MotionEvent.ACTION_CANCEL);
+        try {
+            orig.onTouch(touchView, cancel);
+        } finally {
+            cancel.recycle();
+        }
+        if (longPressResponder != null) {
+            longPressResponder.onLongPress(e.getX(), e.getY());
+        }
     }
 
     @Override
     public boolean onTouch(View view, MotionEvent event) {
-        //we handle all the touch stuff ourselves, rather than
-        //allowing the proxy to do it. This is because
-        //we have to alter panTapGestureDetector and
-        //it is private within TouchInput
-
-        if(event.getActionMasked() == MotionEvent.ACTION_UP)
-        {
-            //notify the responder that the long press is finished
-            if(longPressActive)
-            {
-                //notify the responder that the long press is finished
-                if(longPressResponder != null)
-                    longPressResponder.onLongPressUp(event.getX(), event.getY());
-                longPressActive = false;
+        touchView = view;
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            // Recover even if Android did not deliver the previous terminal event.
+            cancelLongPress();
+        }
+        boolean customGesture = longPressActive;
+        if (action == MotionEvent.ACTION_CANCEL) {
+            // Cancellation discards selection; only a real UP commits it.
+            cancelLongPress();
+        } else if (action == MotionEvent.ACTION_UP && longPressActive) {
+            longPressActive = false;
+            if (longPressResponder != null) {
+                longPressResponder.onLongPressUp(event.getX(), event.getY());
             }
         }
 
         longPressGestureDetector.onTouchEvent(event);
         panGestureDetector.onTouchEvent(event);
 
-        if(!longPressActive)
-            orig.onTouch(view,event);
-
+        if (!customGesture && !longPressActive) {
+            orig.onTouch(view, event);
+        }
         return true;
+    }
+
+    private void cancelLongPress() {
+        if (longPressActive) {
+            longPressActive = false;
+            if (longPressResponder != null) {
+                longPressResponder.onLongPressCancel();
+            }
+        }
     }
 
     /**
@@ -125,6 +132,9 @@ public class MyTouchInput implements OnTouchListener {
          * @param y The y screen coordinate of the pressed point
          */
         void onLongPressUp(float x, float y);
+
+        /** Discard a cancelled long-press preview without committing selection. */
+        void onLongPressCancel();
 
         /**
          * Called repeatedly while a touch point is dragged after a long press

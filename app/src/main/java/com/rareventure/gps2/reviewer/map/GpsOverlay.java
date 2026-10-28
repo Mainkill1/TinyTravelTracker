@@ -42,6 +42,9 @@ public interface GpsOverlay {
 	boolean onLongPressMove(float startX, float startY, float endX,
 							float endY);
 
+	/** Discard the active long-press preview without selecting an area. */
+	default void onLongPressCancel() {}
+
 	/**
 	 * long press has ended
 	 */

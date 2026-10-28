@@ -33,6 +33,29 @@ public class MyMapController extends MapController {
         //We need to do this, rather than extend TouchInput, because MapController creates
         //a touch input in its constructor, and sets responders that call private methods within
         // it, such as nativeHandleFlingGesture(mapPointer, posX, posY, velocityX, velocityY);
+        final TouchInput.ScaleResponder scaleResponder = getScaleResponder();
+        getTouchInput().setScaleResponder(new TouchInput.ScaleResponder() {
+            @Override
+            public boolean onScaleBegin() {
+                return scaleResponder.onScaleBegin();
+            }
+
+            @Override
+            public boolean onScale(float x, float y, float scale, float velocity) {
+                if (Float.isNaN(scale) || Float.isInfinite(scale) || scale <= 0) {
+                    return true;
+                }
+                // Tangram 0.10.1 derives inertia from scale change / elapsed time.
+                // Slight quick-scale drift can produce extreme velocity; apply only
+                // the direct gesture, preserving both pinch and quick-scale zoom.
+                return scaleResponder.onScale(x, y, scale, 0);
+            }
+
+            @Override
+            public boolean onScaleEnd() {
+                return scaleResponder.onScaleEnd();
+            }
+        });
         touchInput = new MyTouchInput(context, getTouchInput());
     }
 
@@ -61,6 +84,13 @@ public class MyMapController extends MapController {
                     return responder.onLongPressPan(x1, x2, x3, x4);
                 }
                 return false;
+            }
+
+            @Override
+            public void onLongPressCancel() {
+                if (responder != null) {
+                    responder.onLongPressCancel();
+                }
             }
 
             @Override
