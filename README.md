@@ -26,7 +26,7 @@ _Note to users: If you have an issue you would like to see fixed, please click o
 
 Development checks:
 
-Run `scripts/test-gps-regressions.sh` with JDK 9 or newer. This compiles the production GPS strategy and battery controller with test doubles for Android/I/O boundaries; no Android SDK or external libraries are required. It covers overdue alarms, zero-length waits, early GPS fixes, shutdown cleanup, continuous GPS, battery cutoff transitions, and charging recovery. GitHub Actions runs these checks on pushes and pull requests.
+Run `scripts/test-gps-regressions.sh` with JDK 9 or newer. This compiles the production GPS strategy, GPS reader, processing thread, and battery controller with test doubles for Android/I/O boundaries; no Android SDK or external libraries are required. It covers overdue alarms, zero-length waits, early GPS fixes, shutdown cleanup, worker failures and late wakeups, continuous GPS, battery cutoff transitions, charging and provider recovery, fix timestamps, buffer overflow, and callbacks during slow processing. GPS timestamps retain the time of the fix. A full buffer preserves queued fixes and discards incoming fixes until space is available; one ring slot is reserved to distinguish full from empty. GitHub Actions runs these checks on pushes and pull requests.
 
 Below the configured battery cutoff, tracking now pauses with a visible notification and releases GPS, worker threads, alarms, and wake locks. It resumes when charging or when the battery reaches the cutoff. Invalid battery samples retain the previous state. An unplugged phone reporting `NOT_CHARGING` also obeys the cutoff.
 
