@@ -83,7 +83,10 @@ public class IntentTimer {
 	 */
 	public synchronized void sleepUntil(long timeToWakeFromPhoneBoot)
 	{
-		DebugLogFile.log("sleep until "+new Date(System.currentTimeMillis() + timeToWakeFromPhoneBoot - SystemClock.elapsedRealtime()));
+		if (DebugLogFile.isEnabled()) {
+			DebugLogFile.log("sleep until " + new Date(System.currentTimeMillis()
+					+ timeToWakeFromPhoneBoot - SystemClock.elapsedRealtime()));
+		}
 		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
 			SetAlarmMarshmallow.setAlarm(alarmManager,AlarmManager.ELAPSED_REALTIME_WAKEUP, timeToWakeFromPhoneBoot, sender);
 		else

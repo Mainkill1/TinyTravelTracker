@@ -28,6 +28,7 @@ import java.util.Date;
 import java.util.HashSet;
 
 import android.util.Log;
+import com.rareventure.util.DebugLogFile;
 
 /**
  * Testing and debugging utilities
@@ -59,7 +60,7 @@ public class TestUtil {
 			os.writeChars("Thread "+Thread.currentThread()+" Mode "+writeConstants+"\n");
 		}
 		TestUtil.mode = writeConstants;
-		if(!modesToSuppress.contains(writeConstants))
+		if(DebugLogFile.isEnabled() && !modesToSuppress.contains(writeConstants))
 			Log.w(tag, "Thread "+Thread.currentThread()+" Mode "+writeConstants);
 	}
 
@@ -73,9 +74,10 @@ public class TestUtil {
 
 	
 	private static void log(DataOutputStream os, String name, String format, Object ... values) throws IOException {
+		if (os == null && !DebugLogFile.isEnabled()) return;
 		if(os != null)
 			os.writeChars(String.format(NAME_FORMAT, ++count, mode.ordinal(), name) + String.format(format, values)+"\n");
-		if(!modesToSuppress.contains(mode))
+		if(DebugLogFile.isEnabled() && !modesToSuppress.contains(mode))
 			Log.w(tag, String.format(NAME_FORMAT, ++count, mode.ordinal(), name) + String.format(format, values));
 		if(os != null)
 			os.flush();
@@ -88,6 +90,7 @@ public class TestUtil {
 	private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 	
 	public static void writeTime(String name, DataOutputStream os, long value) throws IOException {
+		if (os == null && !DebugLogFile.isEnabled()) return;
 		String date;
 		synchronized(sdf)
 		{
@@ -119,6 +122,7 @@ public class TestUtil {
 	}
 
 	public static void writeException(DataOutputStream os,Exception e) throws IOException {
+		if (os == null && !DebugLogFile.isEnabled()) return;
 		synchronized (TestUtil.class)
 		{
 			writeString("Exception Name", os, e.toString());
