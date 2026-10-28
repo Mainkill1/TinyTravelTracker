@@ -1,0 +1,134 @@
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+
+public class CacheWorker extends Thread {
+    static class Preferences { long areaPanelUpdateGpsLocSpinLockMs = 300000; }
+    static final Preferences prefs = new Preferences();
+    enum GTGEvent { LOADING_MEDIA, PROCESSING_GPS_POINTS }
+    static class GTG {
+        static final String TAG = "GTG";
+        static CacheWorker cacheCreator;
+        static final Media mediaLocTimeMap = new Media();
+        static boolean checkSdCard(Object activity) {
+            cacheCreator.passes.incrementAndGet();
+            return true;
+        }
+        static void alert(GTGEvent event, boolean enabled) { }
+    }
+    static class Media { void deleteMarkedMltsFromDb() { } }
+    static class Log { static void d(String tag, String message) { } }
+    static class Util { static void printAllStackTraces() { } }
+
+    // The constructor, database, and map are outside this host scheduling test.
+    private boolean mediaDirty = true;
+    public boolean isShutdown;
+    Object gtum;
+    final AtomicInteger passes = new AtomicInteger();
+    final AtomicInteger loads = new AtomicInteger();
+    volatile int batchesRemaining;
+    volatile Throwable failure;
+
+    CacheWorker(boolean mapOpen, int pendingBatches) {
+        gtum = mapOpen ? new Object() : null;
+        batchesRemaining = pendingBatches;
+        setDaemon(true);
+        setUncaughtExceptionHandler((thread, error) -> failure = error);
+        GTG.cacheCreator = this;
+    }
+
+    // Storage boundary: false means another GPS batch remains, true means caught up.
+    public boolean loadNextPoints() {
+        loads.incrementAndGet();
+        if (batchesRemaining > 0) {
+            batchesRemaining--;
+            return false;
+        }
+        return true;
+    }
+
+    /* PRODUCTION_METHODS */
+
+    static void await(BooleanSupplier condition, String description) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(1);
+        check(condition.getAsBoolean(), description);
+    }
+
+    static void check(boolean condition, String message) {
+        if (!condition) throw new AssertionError(message);
+    }
+
+    static void awaitIdle(CacheWorker worker) throws Exception {
+        await(() -> worker.getState() == State.TIMED_WAITING || worker.passes.get() > 1000
+                || worker.failure != null, "worker must reach timed wait");
+        check(worker.failure == null, "worker failed: " + worker.failure);
+        check(worker.getState() == State.TIMED_WAITING,
+                "idle cache worker must wait; observed " + worker.passes.get() + " loop passes");
+        int passes = worker.passes.get();
+        Thread.sleep(25);
+        check(worker.passes.get() == passes, "idle cache worker kept spinning");
+    }
+
+    static void stop(CacheWorker worker) throws Exception {
+        worker.shutdown();
+        worker.join(1000);
+        check(!worker.isAlive(), "shutdown must wake and stop idle cache worker");
+        check(worker.failure == null, "worker failed: " + worker.failure);
+    }
+
+    static void idle(boolean mapOpen) throws Exception {
+        CacheWorker worker = new CacheWorker(mapOpen, 0);
+        worker.start();
+        try {
+            awaitIdle(worker);
+            check(worker.loads.get() == 1, "initial GPS load must run before waiting");
+            int previousPasses = worker.passes.get();
+            worker.notifyMediaDirty();
+            await(() -> worker.passes.get() > previousPasses, "notification must wake worker");
+            awaitIdle(worker);
+            check(worker.loads.get() == 1, "media notification must preserve GPS deadline");
+        } finally {
+            stop(worker);
+        }
+        System.out.println("PASS idle, media notification, shutdown; mapOpen=" + mapOpen);
+    }
+
+    static void retryGpsBatches() throws Exception {
+        CacheWorker worker = new CacheWorker(true, 3);
+        worker.start();
+        try {
+            awaitIdle(worker);
+            check(worker.loads.get() == 4 && worker.batchesRemaining == 0,
+                    "unfinished GPS batches must run immediately before waiting");
+        } finally {
+            stop(worker);
+        }
+        System.out.println("PASS unfinished GPS batches drain before waiting");
+    }
+
+    static void pollForNewGpsWork() throws Exception {
+        prefs.areaPanelUpdateGpsLocSpinLockMs = 100;
+        CacheWorker worker = new CacheWorker(true, 0);
+        worker.start();
+        try {
+            await(() -> worker.getState() == State.TIMED_WAITING, "initial GPS polling wait");
+            worker.batchesRemaining = 2;
+            // Existing notifications may wake early; the GPS deadline still controls polling.
+            worker.notifyMediaDirty();
+            await(() -> worker.loads.get() >= 4, "new GPS work must load at next deadline");
+            check(worker.batchesRemaining == 0, "new GPS batches must drain");
+        } finally {
+            stop(worker);
+            prefs.areaPanelUpdateGpsLocSpinLockMs = 300000;
+        }
+        System.out.println("PASS GPS deadline polls and drains new work");
+    }
+
+    public static void main(String[] args) throws Exception {
+        idle(false);
+        idle(true);
+        retryGpsBatches();
+        pollForNewGpsWork();
+    }
+}
