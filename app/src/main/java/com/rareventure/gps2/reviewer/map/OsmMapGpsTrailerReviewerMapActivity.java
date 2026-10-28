@@ -102,20 +102,22 @@ GTGEventListener
 		if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
 				== PackageManager.PERMISSION_GRANTED)
 		{
-			Criteria criteria = new Criteria();
-			criteria.setSpeedRequired(false);
-			criteria.setAccuracy(Criteria.ACCURACY_FINE);
-			criteria.setAltitudeRequired(false);
-			criteria.setBearingRequired(false);
-			criteria.setCostAllowed(false);
-
-			String locationProviderName = locationManager.getBestProvider(criteria, true);
-			locationManager.requestLocationUpdates(locationProviderName, 0, 0, gpsLocationOverlay, getMainLooper());
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
+                    com.rareventure.android.GpsReader.requestGpsUpdates(locationManager, 0,
+                            gpsLocationOverlay, getMainLooper());
+            } catch (SecurityException | IllegalArgumentException e) {
+                Log.w(GTG.TAG, "Map GPS registration failed; check precise location permission and provider", e);
+            }
 		}
 	}
 
 	public void removeLocationUpdates(GpsLocationOverlay gpsLocationOverlay) {
-		locationManager.removeUpdates(gpsLocationOverlay);
+        try {
+            locationManager.removeUpdates(gpsLocationOverlay);
+        } catch (SecurityException e) {
+            Log.w(GTG.TAG, "Location permission changed while removing map updates", e);
+        }
 	}
 
 
@@ -140,7 +142,7 @@ GTGEventListener
 
 		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
-		ContextCompat.startForegroundService(this,new Intent(this, GpsTrailerService.class));
+        com.rareventure.gps2.CollectorServicePolicy.startFromActivity(this);
 
         timeAndDateSdf = new SimpleDateFormat(getString(R.string.time_and_date_format));
         

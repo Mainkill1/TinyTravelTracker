@@ -47,7 +47,9 @@ public class CollectorRecoveryRegressionTest {
 
     GTG.prefs.isCollectData = true;
     GTG.Requirement.PREFS_LOADED.fulfilled = true;
+    com.rareventure.gps2.GpsTrailerService.running=true;
     CollectorServicePolicy.restartCollector(context);
+    com.rareventure.gps2.GpsTrailerService.running=false;
     check(ContextCompat.starts == 1, "Re-enabling starts collection despite older saved false");
     CollectorServicePolicy.scheduleRestartJob(context);
     JobInfo recovery = context.scheduler.jobs.get(1);
@@ -76,6 +78,29 @@ public class CollectorRecoveryRegressionTest {
     job.onStartJob(new JobParameters());
     check(job.broadcasts == 1, "Live disabled preference prevents additional recovery broadcasts");
     assertCancelled(job, "Job sees unsaved live disabled preference");
+    android.os.Build.VERSION.SDK_INT=29;
+    context = state(true, true, true); context.background=false;
+    new GpsTrailerReceiver().onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+    check(ContextCompat.starts == 1, "Android 10 location FGS may recover without separate background grant");
+    android.os.Build.VERSION.SDK_INT = 36;
+    context = state(true, true, true);
+    new GpsTrailerReceiver().onReceive(context, new Intent(context, GpsTrailerReceiver.class));
+    check(ContextCompat.starts == 0, "Inexact alarm cannot launch a new FGS on Android 12+");
+    context.background = false;
+    new GpsTrailerReceiver().onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+    check(ContextCompat.starts == 0, "Boot needs background location permission on modern Android");
+    context.background = true;
+    new GpsTrailerReceiver().onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+    check(ContextCompat.starts == 1, "Boot exemption with all-time precise grant may recover");
+    context.fine = false;
+    new GpsTrailerReceiver().onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+    check(ContextCompat.starts == 1, "Missing precise grant must prevent service creation");
+    context.fine = true;
+    ContextCompat.rejectStart = true;
+    new GpsTrailerReceiver().onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+    ContextCompat.rejectStart = false;
+    CollectorServicePolicy.scheduleRestartJob(context);
+    check(!context.scheduler.jobs.containsKey(1), "Obsolete periodic FGS restart job is cancelled on Android 12+");
     System.out.println("PASS: collector settings, startup, boot and periodic job recovery policy");
   }
 

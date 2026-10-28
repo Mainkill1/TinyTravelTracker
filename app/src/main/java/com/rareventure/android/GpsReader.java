@@ -29,7 +29,8 @@ import com.rareventure.gps2.GTG.GTGEvent;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.location.Criteria;
+import android.util.Log;
+import com.rareventure.util.DebugLogFile;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -49,6 +50,8 @@ public class GpsReader implements DataReader
 
 		@Override
 		public void onLocationChanged(Location location) {
+			lastFixTime = location.getTime();
+			Log.i(tag, "GPS fix received: time=" + lastFixTime);
 			synchronized(processThread.lock) {
 				int index = gpsDataBuffer.rawReadIndex;
 				gpsDataBuffer.lat[index] = location.getLatitude();
@@ -81,6 +84,22 @@ public class GpsReader implements DataReader
 	private LocationManager lm;
 	
 	private boolean gpsOn;
+	private static volatile boolean providerRegistered;
+	public static boolean isProviderRegistered() { return providerRegistered; }
+	private static volatile long lastFixTime;
+	private static volatile String registrationState = "GPS not registered";
+
+	/** A running service alone is not evidence of a GPS fix. No coordinates are logged. */
+	public static String getDiagnosticStatus() {
+		return registrationState + (lastFixTime == 0 ? "; no GPS fix received this process"
+				: "; last GPS fix " + new java.util.Date(lastFixTime));
+	}
+
+	private void reportState(String state) {
+		registrationState = state;
+		Log.i(tag, getDiagnosticStatus());
+		DebugLogFile.log(getDiagnosticStatus());
+	}
 	
 	private Looper looper;
 	private String tag;
@@ -91,6 +110,12 @@ public class GpsReader implements DataReader
 
 		void processGpsData(double lon, double lat, double alt, long time);
 	}
+
+    /** Explicit provider selection shared by recording and the live map marker. */
+    public static void requestGpsUpdates(LocationManager manager, long interval,
+            LocationListener listener, Looper callbackLooper) {
+        manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, interval, 0, listener, callbackLooper);
+    }
 
     public GpsReader(DataOutputStream os, Context ctx, 
     		GpsProcessor gpsProcessor, 
@@ -181,12 +206,14 @@ public class GpsReader implements DataReader
 //    		Log.d(GpsTrailerService.TAG,"Turning on gps");
 			if(!lm.isProviderEnabled( LocationManager.GPS_PROVIDER))
 			{
+				reportState("GPS provider disabled");
 				GTG.alert( GTGEvent.ERROR_GPS_DISABLED);
 				return;
 			}
 			if(ActivityCompat.checkSelfPermission(this.ctx, Manifest.permission.ACCESS_FINE_LOCATION)
 					!= PackageManager.PERMISSION_GRANTED)
 			{
+				reportState("Precise location permission missing");
 				GTG.alert( GTGEvent.ERROR_GPS_NO_PERMISSION);
 //				Log.d(GpsTrailerService.TAG,"Failed no permission");
 				return;
@@ -196,19 +223,23 @@ public class GpsReader implements DataReader
 //				Log.d(GpsTrailerService.TAG,"Gps already on");
 				return; //already on
 			}
-			gpsOn = true;
-
-//			Log.d(GpsTrailerService.TAG,"Really turning on");
-			Criteria criteria = new Criteria();
-			criteria.setSpeedRequired(false);
-			criteria.setAccuracy(Criteria.ACCURACY_FINE);
-			criteria.setAltitudeRequired(false);
-			criteria.setBearingRequired(false);
-			criteria.setCostAllowed(false);
-
-			String providerName =  lm.getBestProvider(criteria, true);
-			lm.requestLocationUpdates(providerName, prefs.gpsRecurringTimeMs, 0,
-					locationListener, looper);
+            try {
+                // Criteria may select fused/network (or null). The collector explicitly needs GPS.
+                requestGpsUpdates(lm, prefs.gpsRecurringTimeMs, locationListener, looper);
+                gpsOn = true;
+                providerRegistered = true;
+                reportState("GPS provider registered; waiting for updates");
+            } catch (SecurityException e) {
+                gpsOn = false;
+                providerRegistered = false;
+                reportState("GPS registration denied: " + e.getClass().getSimpleName());
+                GTG.alert(GTGEvent.ERROR_GPS_NO_PERMISSION);
+            } catch (IllegalArgumentException e) {
+                gpsOn = false;
+                providerRegistered = false;
+                reportState("GPS provider unavailable: " + e.getClass().getSimpleName());
+                GTG.alert(GTGEvent.ERROR_GPS_DISABLED);
+            }
     	}
 	}
 	
@@ -219,8 +250,14 @@ public class GpsReader implements DataReader
     		if(!gpsOn)
     			return; //already off
 			gpsOn = false;
+			providerRegistered = false;
+			reportState("GPS paused by recording schedule");
 //			Log.d(GpsTrailerService.TAG,"Really offing gps");
-			lm.removeUpdates(locationListener);
+            try {
+                lm.removeUpdates(locationListener);
+            } catch (SecurityException e) {
+                reportState("GPS stopped after permission change");
+            }
     	}
     	
     	//TODO x1: HACK ADDDS FAKE GPS LOCATION DATA

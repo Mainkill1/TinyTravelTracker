@@ -36,6 +36,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Build;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.provider.Settings;
 import androidx.core.content.ContextCompat;
 import android.util.Log;
 
@@ -44,6 +48,7 @@ import pl.tajchert.nammu.PermissionCallback;
 
 public class GTGActivityHelper {
 	private Activity activity;
+    private static boolean permissionRequestInFlight;
 	private IGTGActivity iGtgActivity;
 
 	private Bundle doOnCreateBundle;
@@ -116,16 +121,17 @@ public class GTGActivityHelper {
 
 	/** GPS_PROVIDER recording requires precise location, even when coarse is granted. */
 	private void getGpsAllowOrDeny() {
+        if (permissionRequestInFlight) return;
 		if (Nammu.hasPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION)) {
 			// A user may have enabled precise location in Settings after refusing it here.
-			if (GTG.userDoesntWantUsToHaveGpsPerm)
-				onGpsPermissionResult();
+            onGpsPermissionResult();
 			return;
 		}
-		if (GTG.userDoesntWantUsToHaveGpsPerm)
-			return;
+        if (GTG.userDoesntWantUsToHaveGpsPerm || permissionRequestInFlight)
+            return;
+        permissionRequestInFlight = true;
 
-		Nammu.askForPermission(activity, new String[] {
+        Nammu.askForPermission(activity, new String[] {
 				Manifest.permission.ACCESS_FINE_LOCATION,
 				Manifest.permission.ACCESS_COARSE_LOCATION
 		}, new PermissionCallback() {
@@ -141,14 +147,16 @@ public class GTGActivityHelper {
 		});
 	}
 
-	private void onGpsPermissionResult() {
+    private void onGpsPermissionResult() {
+        permissionRequestInFlight = false;
 		// Check the actual grant rather than treating a partial grant as total denial.
 		boolean precise = Nammu.hasPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION);
 		GTG.userDoesntWantUsToHaveGpsPerm = !precise;
 		GTG.alert(GTG.GTGEvent.ERROR_GPS_NO_PERMISSION, !precise);
 		if (precise) {
-			ContextCompat.startForegroundService(activity, new Intent(activity, GpsTrailerService.class));
-			return;
+            if (CollectorServicePolicy.startFromActivity(activity))
+                requestRecordingPermissions();
+            return;
 		}
 
 		boolean approximate = Nammu.hasPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION);
@@ -158,6 +166,58 @@ public class GTGActivityHelper {
 				.setPositiveButton(android.R.string.ok, null)
 				.show();
 	}
+
+    private SharedPreferences permissionPrompts() {
+        return activity.getSharedPreferences("recording_permission_prompts", 0);
+    }
+
+    private void requestRecordingPermissions() {
+        if (permissionRequestInFlight) return;
+        // Notification denial does not block the location foreground service.
+        if (Build.VERSION.SDK_INT >= 33
+                && !Nammu.hasPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+                && !permissionPrompts().getBoolean("notification_requested", false)) {
+            permissionPrompts().edit().putBoolean("notification_requested", true).apply();
+            permissionRequestInFlight = true;
+            Nammu.askForPermission(activity, Manifest.permission.POST_NOTIFICATIONS, new PermissionCallback() {
+                @Override public void permissionGranted() { finishNotificationRequest(); }
+                @Override public void permissionRefused() { finishNotificationRequest(); }
+            });
+            return;
+        }
+        requestBackgroundLocation();
+    }
+
+    private void finishNotificationRequest() {
+        permissionRequestInFlight = false;
+        requestBackgroundLocation();
+    }
+
+    private void requestBackgroundLocation() {
+        if (Build.VERSION.SDK_INT < 29
+                || Nammu.hasPermission(activity, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                || permissionPrompts().getBoolean("background_explained", false)) return;
+        permissionPrompts().edit().putBoolean("background_explained", true).apply();
+        if (Build.VERSION.SDK_INT == 29) {
+            permissionRequestInFlight = true;
+            // Foreground location was granted first. Never combine background with fine/coarse.
+            Nammu.askForPermission(activity, Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+                    new PermissionCallback() {
+                        @Override public void permissionGranted() { permissionRequestInFlight = false; }
+                        @Override public void permissionRefused() { permissionRequestInFlight = false; }
+                    });
+        } else {
+            CharSequence label = activity.getPackageManager().getBackgroundPermissionOptionLabel();
+            new AlertDialog.Builder(activity)
+                    .setMessage("To restart recording after a reboot, open Permissions > Location in app settings and choose "
+                            + label + ". Recording started while this app is open can continue without this permission.")
+                    .setPositiveButton("App settings", (dialog, which) -> activity.startActivity(
+                            new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:" + activity.getPackageName()))))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        }
+    }
 
 	//co: this was used for appcompat v 27. It didn't work, so I'm downgrading back to
     //v26. In v27, I can't request wake locks even though I have the permission.
@@ -189,13 +249,6 @@ public class GTGActivityHelper {
 
 	public void onCreate(Bundle bundle)
 	{
-		//we always start the service incase the process was killed. If the service shouldn't
-		//be running, it will stop itself
-		//PERF maybe a little wasteful to keep restarting the service if it is not supposed to
-		//be running
-		ContextCompat.startForegroundService(activity,new Intent(activity,
-                GpsTrailerService.class));
-
         if(state != State.START)
 			throw new IllegalStateException("Don't call me from doOnCreate " +
 					"(or some other problem, why is state "+state+"?)");

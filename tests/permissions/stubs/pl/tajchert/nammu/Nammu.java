@@ -4,11 +4,13 @@ import android.Manifest;
 import android.app.Activity;
 
 public class Nammu {
-  public static boolean fine, coarse;
+  public static boolean fine, coarse, notifications, background;
   public static String[] requested;
   public static PermissionCallback callback;
 
   public static boolean hasPermission(Activity a, String p) {
+    if (p.equals(Manifest.permission.POST_NOTIFICATIONS)) return notifications;
+    if (p.equals(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) return background;
     return p.equals(Manifest.permission.ACCESS_FINE_LOCATION) ? fine : coarse;
   }
 

@@ -31,6 +31,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ServiceInfo;
+import com.rareventure.android.GpsReader;
 import android.location.LocationManager;
 import android.os.BatteryManager;
 import android.os.Binder;
@@ -92,6 +94,28 @@ public class GpsTrailerService extends Service {
 	};
 
 	private Handler mHandler;
+    private boolean foregroundReady;
+    private final Handler diagnosticHandler = new Handler();
+    private final Runnable diagnosticRefresh = new Runnable() {
+        @Override public void run() {
+            Log.i(TAG, GpsReader.getDiagnosticStatus());
+            DebugLogFile.log(GpsReader.getDiagnosticStatus());
+            if (currentNotificationSetting != null
+                    && currentNotificationSetting.msgId == R.string.service_active)
+                showCurrentNotification();
+            diagnosticHandler.postDelayed(this, 60_000);
+        }
+    };
+
+    public static boolean notifyIfRunning() {
+        GpsTrailerService service = GTG.service;
+        if (service == null) return false;
+        if (service.gpsManager != null) service.gpsManager.notifyWoken();
+        return true;
+    }
+
+    /** Available to device/instrumentation diagnostics; deliberately excludes coordinates. */
+    public static String getGpsDiagnosticStatus() { return GpsReader.getDiagnosticStatus(); }
 
 	public class LocalBinder extends Binder {
 		//   	private static final String DESCRIPTOR = "com.rareventure.tapmusic.ITapServiceCallback";
@@ -131,7 +155,8 @@ public class GpsTrailerService extends Service {
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
-		if (!CollectorServicePolicy.isCollectionEnabled(this)) {
+		if (!foregroundReady || !CollectorServicePolicy.isCollectionEnabled(this)
+                || !CollectorServicePolicy.hasPreciseLocation(this)) {
 			stopSelf();
 			return Service.START_NOT_STICKY;
 		}
@@ -355,9 +380,17 @@ public class GpsTrailerService extends Service {
         //reset all flags
         notificationFlags = 0;
 
+        // Runtime location must be granted before promoting a location foreground service.
+        if (!CollectorServicePolicy.isCollectionEnabled(this)
+                || !CollectorServicePolicy.hasPreciseLocation(this)) {
+            stopUnstartedForegroundService();
+            return;
+        }
         updateNotification(FLAG_GPS_ENABLED, true);
+        if (!foregroundReady) return;
+        diagnosticHandler.post(diagnosticRefresh);
 
-		GTG.addGTGEventListener(gtgEventListener);
+        GTG.addGTGEventListener(gtgEventListener);
 
 		//read isCollectData first from shared prefs and if its false, quit immediately
 		//we don't want to notify the user that we ran for any reason if this is false
@@ -510,32 +543,24 @@ public class GpsTrailerService extends Service {
 			((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).createNotificationChannel(channel);
 		}
 
-		if (currentNotificationSetting.msgId == -1
-				&& currentNotificationSetting.iconId == -1) {
-			if (Build.VERSION.SDK_INT >= 26) {
-				//we still need to create an icon, even though we are shutting down
-				//or android will kill our app
-				NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
-						"Tiny Travel Tracker",
-						NotificationManager.IMPORTANCE_DEFAULT);
+        if (currentNotificationSetting.msgId == -1
+                && currentNotificationSetting.iconId == -1) {
+            Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.green)
+                    .setOnlyAlertOnce(true)
+                    .setContentTitle("Tiny Travel Tracker")
+                    .setContentText("Starting GPS; waiting for a location fix").build();
+            promoteToLocationForeground(notification);
+            return;
+        }
 
-				((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).createNotificationChannel(channel);
-
-				Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-						.setSmallIcon(R.drawable.green)
-						.setContentTitle("Tiny Travel Tracker")
-						.setContentText(getText(R.string.service_active)).build();
-
-				startForeground(1, notification);
-			}
-			return;
-		}
-
-		CharSequence text = getText(currentNotificationSetting.msgId);
+		CharSequence text = currentNotificationSetting.msgId == R.string.service_active
+                ? GpsReader.getDiagnosticStatus() : getText(currentNotificationSetting.msgId);
 
 		// Set the icon, scrolling text and timestamp
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID);
 		builder.setSmallIcon(currentNotificationSetting.iconId);
+        builder.setOnlyAlertOnce(true); // The minute-by-minute GPS status refresh must not alert again.
 		builder.setOngoing(currentNotificationSetting.isOngoing);
 		builder.setAutoCancel(!currentNotificationSetting.isOngoing);
 		builder.setContentText(text);
@@ -551,20 +576,61 @@ public class GpsTrailerService extends Service {
 						0,
 						currentNotificationSetting.intent != null ? currentNotificationSetting.intent
 								: intent, 
-								PendingIntent.FLAG_UPDATE_CURRENT);
+								PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
 
 		builder.setContentIntent(contentIntent);
 
 		Notification notification = builder.build();
 
-		startForeground(1, notification);
+		promoteToLocationForeground(notification);
 
 	}
+
+    private void promoteToLocationForeground(Notification notification) {
+        try {
+            if (Build.VERSION.SDK_INT >= 29)
+                startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            else
+                startForeground(1, notification);
+            foregroundReady = true;
+        } catch (SecurityException | IllegalStateException e) {
+            foregroundReady = false;
+            Log.e(TAG, "Location foreground service cannot start; reopen app and check permissions", e);
+            stopUnstartedForegroundService();
+        }
+    }
+
+    private void stopUnstartedForegroundService() {
+        // A startForegroundService request still obliges promotion when grants/preferences
+        // change before onCreate. stopSelf alone can crash the process on modern Android.
+        final String channelId = "gpstrailer_channel";
+        if (Build.VERSION.SDK_INT >= 26) {
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(
+                    new NotificationChannel(channelId, "Tiny Travel Tracker", NotificationManager.IMPORTANCE_DEFAULT));
+        }
+        final Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.green)
+                .setContentTitle("Tiny Travel Tracker")
+                .setContentText("Recording stopped").build();
+        ForegroundStartup.stopUnstartedService(Build.VERSION.SDK_INT, new ForegroundStartup.Actions() {
+            @Override public void promote(int foregroundType) {
+                if (Build.VERSION.SDK_INT >= 29)
+                    startForeground(1, notification, foregroundType);
+                else
+                    startForeground(1, notification);
+            }
+            @Override public void stop() {
+                stopForeground(true);
+                stopSelf();
+            }
+        });
+    }
 
 	@Override
 	public void onDestroy() {
 		super.onDestroy();
 		Log.d(TAG, "GPS Service Shutdown");
+        diagnosticHandler.removeCallbacks(diagnosticRefresh);
 
 		GTG.removeGTGEventListener(gtgEventListener);
 
@@ -615,9 +681,8 @@ public class GpsTrailerService extends Service {
 	public void onTaskRemoved(Intent rootIntent) {
 		if (!CollectorServicePolicy.isCollectionEnabled(this))
 			return;
-		DebugLogFile.log("onTaskRemoved called, trying to restart");
-		ContextCompat.startForegroundService(this,new Intent(this,
-				GpsTrailerService.class));
-		DebugLogFile.log("onTaskRemoved called, restart finished");
+        // The existing foreground collector continues after the UI task is removed.
+        // A task-removal callback is not permission to start another FGS on Android 12+.
+        DebugLogFile.log("onTaskRemoved: foreground collector remains responsible for recording");
 	}
 }

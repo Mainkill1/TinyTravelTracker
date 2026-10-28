@@ -41,6 +41,8 @@ public class GpsReaderRegressionTest {
         List<Long> times = new ArrayList<>();
         Fixture f = new Fixture((lon, lat, alt, time) -> times.add(time));
         f.emit(0); f.emit(1); f.drain();
+        check(GpsReader.getDiagnosticStatus().contains("last GPS fix"),
+                "diagnostics distinguish a received fix from a running listener");
         check(times.size() == 2 && times.get(0) == FIX_TIME && times.get(1) == FIX_TIME + 1000,
                 "delayed callbacks must preserve distinct 64-bit fix timestamps");
         f.reader.notifyShutdown();
@@ -84,13 +86,31 @@ public class GpsReaderRegressionTest {
         check(ids.size() == 16, "processing one fix must leave room for 15 queued fixes");
         for (int i = 0; i < 16; i++) check(ids.get(i) == i, "queued coordinates must remain intact during processing");
     }
+    static void explicitGpsRegistration() {
+        Fixture f = new Fixture((lon, lat, alt, time) -> {});
+        check(LocationManager.GPS_PROVIDER.equals(f.manager.requestedProvider),
+                "recording must register GPS even if criteria choose network/fused");
+        check(GpsReader.isProviderRegistered(), "diagnostics report successful registration");
+        f.reader.turnOff();
+        check(!GpsReader.isProviderRegistered(), "paused GPS must not be reported as registered");
+        f.manager.requestFailure = new SecurityException("permission revoked during request");
+        try { f.reader.turnOn(); } catch (SecurityException expected) {}
+        check(!f.reader.isGpsOn() && !GpsReader.isProviderRegistered(),
+                "failed registration must not leave gpsOn or diagnostics stuck true");
+        f.manager.requestFailure = null;
+        f.reader.turnOn();
+        check(f.reader.isGpsOn() && f.manager.listener != null,
+                "registration must retry after transient failure");
+        f.reader.turnOff();
+    }
     public static void main(String[] args) throws Exception {
         int failures = 0;
-        for (int test = 0; test < 3; test++) {
+        for (int test = 0; test < 4; test++) {
             try {
                 if (test == 0) timestamps();
                 if (test == 1) overflow();
                 if (test == 2) blockedProcessor();
+                if (test == 3) explicitGpsRegistration();
                 System.out.println("PASS reader regression " + test);
             } catch (AssertionError error) {
                 failures++;

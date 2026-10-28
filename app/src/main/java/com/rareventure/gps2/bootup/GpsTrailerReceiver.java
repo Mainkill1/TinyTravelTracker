@@ -34,10 +34,7 @@ public class GpsTrailerReceiver extends BroadcastReceiver
 	public void onReceive(Context context, Intent intent) {
 		Log.d("GTG", "GpsTrailerReceiver called");
 
-		if (!CollectorServicePolicy.isCollectionEnabled(context))
-			return;
-
-		ContextCompat.startForegroundService(context, new Intent(context,
-				GpsTrailerService.class));
+        CollectorServicePolicy.recover(context,
+                intent != null && Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction()));
 	}
 }

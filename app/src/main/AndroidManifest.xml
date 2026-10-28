@@ -7,6 +7,10 @@
     >
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" >
     </uses-permission>
@@ -54,8 +58,8 @@
               android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"/> -->
 	    <activity
 	        android:name="com.rareventure.gps2.reviewer.map.OsmMapGpsTrailerReviewerMapActivity"
-            android:exported="true"
             android:label="@string/reviewer_app_name"
+            android:exported="true"
             android:configChanges="orientation|keyboardHidden"
             android:screenOrientation="portrait" >
             <intent-filter>
@@ -74,7 +78,8 @@
         -->
         <service
             android:exported="false"
-            android:name="com.rareventure.gps2.GpsTrailerService">
+            android:name="com.rareventure.gps2.GpsTrailerService"
+            android:foregroundServiceType="location|shortService">
             <intent-filter>
                 <action android:name="com.rareventure.gps2.IGpsTrailerService" />
                 <!--

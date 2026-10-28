@@ -36,6 +36,13 @@ public class PermissionRegressionTest {
   }
 
   static void reset() {
+    android.os.Build.VERSION.SDK_INT=26;
+    try {
+      java.lang.reflect.Field f=GTGActivityHelper.class.getDeclaredField("permissionRequestInFlight");
+      f.setAccessible(true); f.setBoolean(null, false);
+    } catch (Exception e) { throw new AssertionError(e); }
+    Nammu.notifications = false; Nammu.background=false;
+    AlertDialog.explanation=null;
     Nammu.fine = false;
     Nammu.coarse = false;
     Nammu.requested = null;
@@ -109,8 +116,34 @@ public class PermissionRegressionTest {
     Nammu.coarse = true;
     request();
     check(
-        Nammu.requested == null && ContextCompat.starts == 0,
-        "Existing precise grant requires no request or repeated restart");
+        Nammu.requested == null && ContextCompat.starts == 1,
+        "Existing precise grant resumes the collector from a visible activity");
+    reset();
+    android.os.Build.VERSION.SDK_INT=36;
+    Nammu.fine=true; Nammu.coarse=true;
+    Screen screen=new Screen();
+    GTGActivityHelper helper=new GTGActivityHelper(screen, 0);
+    Method permissionMethod=GTGActivityHelper.class.getDeclaredMethod("getGpsAllowOrDeny");
+    permissionMethod.setAccessible(true);
+    permissionMethod.invoke(helper);
+    check(Nammu.requested.length == 1 && Nammu.requested[0].equals(Manifest.permission.POST_NOTIFICATIONS),
+        "Notifications are requested separately after the precise grant");
+    Nammu.callback.permissionRefused();
+    check(AlertDialog.explanation != null && AlertDialog.explanation.contains("Allow all the time"),
+        "Notification refusal still explains optional background restart permission");
+    Nammu.requested=null; AlertDialog.explanation=null;
+    permissionMethod.invoke(helper);
+    check(Nammu.requested == null && AlertDialog.explanation == null,
+        "Declining optional permissions must not prompt repeatedly");
+    reset(); android.os.Build.VERSION.SDK_INT=29;
+    Nammu.fine=true; Nammu.coarse=true;
+    request();
+    check(Nammu.requested.length == 1 && Nammu.requested[0].equals(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+        "Android 10 background permission is its own request after precise");
+    Nammu.callback.permissionRefused();
+    reset();
+    new GTGActivityHelper(new Screen(), 0).onCreate(null);
+    check(ContextCompat.starts == 0, "onCreate must not start a location FGS before precise permission");
     System.out.println("PASS: real GTGActivityHelper permission decisions (8 scenarios)");
   }
 }

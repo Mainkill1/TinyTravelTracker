@@ -5,6 +5,7 @@ public class Context {
   public boolean persistedCollectData;
   public final android.app.job.JobScheduler scheduler = new android.app.job.JobScheduler();
   public int stops;
+  public boolean fine=true, background=true;
 
   public Object getSystemService(String name) {
     if (!JOB_SCHEDULER_SERVICE.equals(name)) throw new AssertionError("Wrong service: " + name);

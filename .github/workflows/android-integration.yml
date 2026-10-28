@@ -1,0 +1,49 @@
+name: Android 16 integration
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17.0.17+10'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          cmdline-tools-version: '12266719'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 emulator system-images;android-36;google_apis;x86_64'
+          log-accepted-android-sdk-licenses: false
+      - run: scripts/fetch-tangram.sh
+      - name: Boot Android 16
+        env:
+          ANDROID_USER_HOME: ${{ runner.temp }}/ttt-android
+          ANDROID_AVD_HOME: ${{ runner.temp }}/ttt-android/avd
+        run: |
+          sudo chmod a+rw /dev/kvm
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd -n ttt -k 'system-images;android-36;google_apis;x86_64' --device pixel_6
+          test -f "$ANDROID_AVD_HOME/ttt.ini"
+          "$ANDROID_HOME/emulator/emulator" -avd ttt -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/ttt-emulator.log 2>&1 &
+          trap 'cat /tmp/ttt-emulator.log' EXIT
+          timeout 120 adb wait-for-device
+          timeout 300 bash -c 'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == 1 ]]; do sleep 5; done'
+          adb shell input keyevent 82
+      - run: ./gradlew --no-daemon --console=plain connectedDebugAndroidTest
+      - name: Capture Android logs
+        if: always()
+        run: timeout 30 adb logcat -d > /tmp/ttt-logcat.txt || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: android-16-test-results
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            /tmp/ttt-emulator.log
+            /tmp/ttt-logcat.txt
