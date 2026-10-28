@@ -24,6 +24,14 @@ It also is useful in situations where you don't have internet access. All map ti
 
 _Note to users: If you have an issue you would like to see fixed, please click on the smiley on the right on the issue screen, and select thumbs up (or thumbs down). I'll use this information to decide what to work on next. Thanks_
 
+Development checks:
+
+Run `scripts/test-gps-regressions.sh` with JDK 9 or newer. This compiles the production GPS strategy and battery controller with test doubles for Android/I/O boundaries; no Android SDK or external libraries are required. It covers overdue alarms, zero-length waits, early GPS fixes, shutdown cleanup, continuous GPS, battery cutoff transitions, and charging recovery. GitHub Actions runs these checks on pushes and pull requests.
+
+Below the configured battery cutoff, tracking now pauses with a visible notification and releases GPS, worker threads, alarms, and wake locks. It resumes when charging or when the battery reaches the cutoff. Invalid battery samples retain the previous state. An unplugged phone reporting `NOT_CHARGING` also obeys the cutoff.
+
+The full Android build still uses Gradle 5.1.1 / Android Gradle Plugin 3.4.0, JDK 8, SDK 26, and legacy dependencies. The standalone checks do not verify Android service integration or replace device testing. To verify on a device, cross the cutoff in both directions, connect/disconnect power below it, and confirm that recording pauses/resumes and the process does not repeatedly restart. Also check screen-off recording and disabling tracking while paused.
+
 Changelog: (you can monitor the latest build here: https://f-droid.org/wiki/index.php?title=com.rareventure.gps2/lastbuild&redirect=no)
 
 V 1.1.48 (build 91) - 2019 Sep 10
