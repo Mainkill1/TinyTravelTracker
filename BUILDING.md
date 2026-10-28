@@ -54,3 +54,24 @@ scripts/fetch-tangram.sh
 be signed separately, verified with `apksigner verify`, and identify its signing
 certificate. The development certificate used by alpha releases cannot update
 an APK signed with another distributor's key.
+
+The Android 16 integration workflow boots an API 36 emulator and runs:
+
+```sh
+./gradlew --no-daemon connectedDebugAndroidTest
+```
+
+These tests exercise Android location delivery into the production GPS reader
+(including double coordinates and a 64-bit fix timestamp), rejected foreground
+starts, system-bar/keyboard insets, Android SAX validation, progress-dialog
+cancelability and native map creation/disposal. The injected location and JNI
+initialization checks do not establish physical GNSS reception, screen-off
+recording, full map rendering or 16 KB-device behavior.
+
+The OnePlus 15 no-fix report remains unconfirmed on the phone. Check the ongoing
+notification for registration and last-fix status. On Android 11 and later,
+boot recovery requires background location access; recording started while the
+app is visible can continue with precise foreground location access. Android
+12+ periodic jobs do not start a new collector from the background. Opening the
+app can restart an eligible collector, and Android may defer inexact alarms in
+Doze.
