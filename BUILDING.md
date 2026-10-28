@@ -15,7 +15,7 @@ distribution checksum before running.
 [upstream's versioned Android README](https://github.com/tangrams/tangram-es/blob/0.10.1/platforms/android/README.md).
 It no longer resolves from the project's repositories. We rebuild its native
 libraries from the exact upstream source with NDK r28c for 16 KB page support,
-retaining all four ABIs and unchanged Java classes/resources.
+retaining all original ABIs and adding x86_64 and unchanged Java classes/resources.
 
 - Source tag: `0.10.1`, commit `3b0463a8bbbb3a3164593a93eeff5465d0b79360`
 - Rebuilt release: https://github.com/Mainkill1/TinyTravelTracker/releases/tag/tangram-0.10.1-16kb-r1

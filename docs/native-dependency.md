@@ -25,7 +25,7 @@ The original AAR SHA-256 is
 Builds use Android API 21, C++14 (required by the original dependencies), PIC, and
 both `-z,max-page-size=16384` and `-z,common-page-size=16384`. Debug information is
 disabled before linking and source/toolchain paths are mapped to stable relative
-paths. All four ABIs are retained: `armeabi-v7a`, `arm64-v8a`, `x86`, and `x86_64`.
+paths. The original `armeabi-v7a`, `arm64-v8a` and `x86` ABIs are retained; `x86_64` is added for modern emulator testing.
 The rebuilt `libtangram.so` and NDK `libc++_shared.so` are stripped of unnecessary
 symbols; no ELF headers or segment contents are patched.
 
@@ -64,7 +64,7 @@ even if its end is not aligned, provided no mutable data shares the rounded page
 64-bit ABIs.
 
 The official AAR fails this check; the rebuilt AAR passes. The 59 exported JNI
-functions match the original library for each original ABI. Packaging checks also
+functions match the original library for all three original ABIs. Packaging checks also
 verify all eight expected native libraries, ZIP integrity, and unchanged upstream
 Java/resources.
 
