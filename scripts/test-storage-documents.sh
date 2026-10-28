@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 classes=$(mktemp -d)
 trap 'rm -rf "$classes"' EXIT
-mapfile -t fixtures < <(rg --files tests/storage/stubs -g '*.java')
+mapfile -t fixtures < <(find tests/storage/stubs -name '*.java' -print)
 sources=(
   "${fixtures[@]}"
   tests/storage/GpxValidationTest.java
