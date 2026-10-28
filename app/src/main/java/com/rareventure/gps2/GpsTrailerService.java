@@ -547,6 +547,7 @@ public class GpsTrailerService extends Service {
                 && currentNotificationSetting.iconId == -1) {
             Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                     .setSmallIcon(R.drawable.green)
+                    .setOnlyAlertOnce(true)
                     .setContentTitle("Tiny Travel Tracker")
                     .setContentText("Starting GPS; waiting for a location fix").build();
             promoteToLocationForeground(notification);
@@ -559,6 +560,7 @@ public class GpsTrailerService extends Service {
 		// Set the icon, scrolling text and timestamp
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID);
 		builder.setSmallIcon(currentNotificationSetting.iconId);
+        builder.setOnlyAlertOnce(true); // The minute-by-minute GPS status refresh must not alert again.
 		builder.setOngoing(currentNotificationSetting.isOngoing);
 		builder.setAutoCancel(!currentNotificationSetting.isOngoing);
 		builder.setContentText(text);
