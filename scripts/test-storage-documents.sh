@@ -10,6 +10,7 @@ sources=(
   app/src/main/java/com/rareventure/gps2/gpx/GpxReader.java
   tests/storage/RestoreCollectorRestartTest.java
   app/src/main/java/com/rareventure/gps2/gpx/RestoreCollectorRestart.java
+  tests/storage/BackupImportCancellationTest.java
   tests/storage/BackupCancellationTest.java
   app/src/main/java/com/rareventure/gps2/gpx/BackupCancellation.java
   tests/storage/PendingBackupRequestTest.java
@@ -28,3 +29,5 @@ java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.PendingBacku
 java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.BackupCancellationTest
 java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.RestoreCollectorRestartTest
 java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.GpxValidationTest
+
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.BackupImportCancellationTest
