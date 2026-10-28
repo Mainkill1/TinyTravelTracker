@@ -198,6 +198,8 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 
 			while((!allLinesCalculated || stillMoreNodesToCalc) && !superThread.manager.isShutdown)
 			{
+				pauseBetweenCalculationPasses();
+
 				if(System.currentTimeMillis() - timeStartedDrawingMs > MAX_TIME_DRAWING_BEFORE_DISPLAY_NOTICE_MS)
 					activity.notifyProcessing(OngoingProcessEnum.DRAW_POINTS);
 
@@ -240,6 +242,7 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 				while(System.currentTimeMillis() - startTime < prefs.maxDrawCalcTime
 						&& stillMoreNodesToCalc)
 				{
+					pauseBetweenCalculationPasses();
 					int status = GTG.cacheCreator.calcViewableNodes(localApStbox, minDepth,
 							earliestOnScreenPointSec, latestOnScreenPointSec);
 
@@ -313,6 +316,20 @@ public class GpsTrailerOverlay extends SuperThread.Task implements GpsOverlay
 			GTG.cacheCreatorLock.unregisterReadingThread();
 			activity.notifyDoneProcessing(OngoingProcessEnum.DRAW_POINTS);
 
+		}
+	}
+
+	/** Check lifecycle state only after releasing cache access, so a background map
+	 * cannot keep the cache writer waiting. Neither boundary holds a view-node lock.
+	 */
+	private void pauseBetweenCalculationPasses() {
+		GTG.cacheCreatorLock.unregisterReadingThread();
+		try {
+			abortOrPauseIfNecessary();
+		}
+		finally {
+			// Keep doWork's read registration balanced, including shutdown exceptions.
+			GTG.cacheCreatorLock.registerReadingThread();
 		}
 	}
 
