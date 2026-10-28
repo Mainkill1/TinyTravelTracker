@@ -3,7 +3,7 @@ import android.app.job.JobInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.support.v4.content.ContextCompat;
+import androidx.core.content.ContextCompat;
 import com.rareventure.gps2.CollectorServicePolicy;
 import com.rareventure.gps2.GTG;
 import com.rareventure.gps2.JobSchedulerRestarterService;

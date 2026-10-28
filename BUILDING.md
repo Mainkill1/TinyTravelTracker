@@ -1,25 +1,13 @@
-# Android build
+# Building Tiny Travel Tracker
 
-This restores the existing SDK 26 application build. Use Linux, Temurin
-**8.0.504+1**, the checked-in **Gradle 5.1.1** wrapper, Android SDK
-**platforms;android-26**, **build-tools;28.0.3**, and platform-tools. Accept the
-Android SDK licenses with `sdkmanager --licenses` using a recent JDK before
-switching `JAVA_HOME` to JDK 8. Set `ANDROID_HOME` to the SDK directory.
-AGP remains **3.4.0**; its [documented defaults](https://developer.android.com/build/releases/agp-3-4-0-release-notes)
-are Gradle 5.1.1 and Build Tools 28.0.3.
+Use Linux, Temurin **17.0.17+10**, the checked-in **Gradle 8.11.1** wrapper,
+Android SDK **platforms;android-36**, **build-tools;35.0.0**, and platform-tools.
+Set `JAVA_HOME` to JDK 17 and `ANDROID_HOME` to the SDK directory, then accept
+the SDK licenses with `sdkmanager --licenses`.
 
-From the repository root:
-
-```sh
-scripts/fetch-tangram.sh
-./gradlew --no-daemon clean assembleDebug testDebugUnitTest
-```
-
-The APK is `app/build/outputs/apk/debug/app-debug.apk`. The workflow
-`.github/workflows/android-build.yml` runs this actual APK build and uploads it.
-The debug APK uses a development signing key and is not a store release.
-The existing unit suite currently contains only an example arithmetic test;
-this build does not replace device testing of recording or map rendering.
+The app compiles and targets Android 16 (API 36), with minimum Android 5
+(API 21). The build plugin is pinned to AGP **8.10.1**. Gradle verifies its
+distribution checksum before running.
 
 ## Tangram provenance
 
@@ -51,18 +39,20 @@ identical signed APKs or permanent third-party artifact availability.
 
 ## Android and native limits
 
-Compile and target SDK remain **26**, minimum SDK **21**. Raising the target
-SDK and validating current Android behavior are separate changes.
-The official AAR includes `libtangram.so` and `libc++_shared.so` for
-**armeabi-v7a**, **arm64-v8a**, and **x86**, with no **x86_64** binaries.
-These are prebuilt native libraries; this build does not compile native code.
-Inspection with `readelf -Wl` found 64 KB (`0x10000`) LOAD alignment for the
-arm64 libraries, and 4 KB (`0x1000`) for the ARMv7 and x86 libraries. However,
-arm64 `libc++_shared.so` has a GNU_RELRO end at `0x111000`, which is not a
-multiple of 16 KB. It fails the current documented RELRO alignment condition.
-The arm64 Tangram library's RELRO ends at `0x64c000`.
-Do **not** treat this artifact as 16 KB compatible. A native dependency rebuild
-or upgrade and device verification are still needed. No 16 KB page-size device
-or current Android runtime has been tested here.
-See [Android's 16 KB guidance](https://developer.android.com/guide/practices/page-sizes)
-before treating this legacy APK as compatible with 16 KB devices or store rules.
+The Android platform migration includes typed foreground location service,
+modern permission sequencing and document-based GPX import/export. Tracker
+files remain in the existing app-specific external directory. The standalone
+host checks exercise production components with Android test doubles; they
+do not replace platform or physical-device testing.
+
+Both APK variants can be built and checked with:
+
+```sh
+scripts/fetch-tangram.sh
+./gradlew --no-daemon clean assembleDebug assembleRelease testDebugUnitTest testReleaseUnitTest
+```
+
+`assembleRelease` produces an unsigned release APK. A published prerelease must
+be signed separately, verified with `apksigner verify`, and identify its signing
+certificate. The development certificate used by alpha releases cannot update
+an APK signed with another distributor's key.

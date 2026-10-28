@@ -19,7 +19,6 @@
 */
 package com.rareventure.gps2.reviewer.map;
 
-import junit.framework.Assert;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint.FontMetrics;

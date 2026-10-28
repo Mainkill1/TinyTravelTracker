@@ -5,7 +5,7 @@ import android.app.job.JobScheduler;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.support.v4.content.ContextCompat;
+import androidx.core.content.ContextCompat;
 
 /** Keeps collector recovery tied to the user's recording preference. */
 public final class CollectorServicePolicy {

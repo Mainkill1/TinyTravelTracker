@@ -22,7 +22,6 @@ package com.rareventure.android.widget;
 import java.util.ArrayList;
 import java.util.TimerTask;
 
-import junit.framework.Assert;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.util.AttributeSet;

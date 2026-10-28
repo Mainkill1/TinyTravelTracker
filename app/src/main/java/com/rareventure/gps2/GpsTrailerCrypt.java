@@ -38,7 +38,6 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 
-import junit.framework.Assert;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -128,8 +127,8 @@ public class GpsTrailerCrypt {
 	 * @param appId no longer used, use MASTER_APP_ID for now
 	 */
 	public static void initializeWithoutPassword(int appId) {
-		Assert.assertTrue("Initial database setup not done",
-				prefs.initialWorkPerformed);
+		if (!prefs.initialWorkPerformed)
+            throw new AssertionError("Initial database setup not done");
 		//TODO 3: co: we don't really need a master app id, because we won't be
 		//cleaning data all at once, but rather only when we read it. 
 //		Assert.assertTrue("Don't use the MASTER_APP_ID", appId != GTG.MASTER_APP_ID);
@@ -207,7 +206,8 @@ public class GpsTrailerCrypt {
 	private static PrivateKey decryptPrivateKey(String password)
 	{
 		if (prefs.isNoPassword) {
-			Assert.assertTrue(password == null);
+			if (password != null)
+                throw new AssertionError("Password must be null when encryption is disabled");
 			password = Util.rot13(GpsTrailerCrypt.NO_PASSWORD_PASSWORD);
 		}
 

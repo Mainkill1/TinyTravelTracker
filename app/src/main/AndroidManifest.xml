@@ -3,7 +3,6 @@
 
     <!-- NOTE, below, sharedUserId enables the premium installation to tell the trial installation to give it its preferences -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.rareventure.gps2"
     android:sharedUserId="com.rareventure.gps2"
     >
 
@@ -54,6 +53,7 @@
               android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"/> -->
 	    <activity
 	        android:name="com.rareventure.gps2.reviewer.map.OsmMapGpsTrailerReviewerMapActivity"
+            android:exported="true"
             android:label="@string/reviewer_app_name"
             android:configChanges="orientation|keyboardHidden"
             android:screenOrientation="portrait" >
