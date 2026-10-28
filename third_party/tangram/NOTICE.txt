@@ -1,7 +1,8 @@
 Tangram ES 0.10.1: https://github.com/tangrams/tangram-es
 Source revision: 3b0463a8bbbb3a3164593a93eeff5465d0b79360
-Native libraries independently rebuilt with Android NDK r28c; no source changes.
-Upstream Java classes and resources are preserved from the official release AAR.
+Native libraries independently rebuilt with Android NDK r28c; native source unchanged.
+FontFileParser.java is patched to read nested variable-font axis metadata.
+All other upstream Java classes and resources are preserved from the official AAR.
 Original source and dependency license notices accompany the rebuilt AAR under
 META-INF/tangram-licenses. Android NDK runtime notices are included there too.
 
