@@ -14,11 +14,11 @@ final class BatteryTrackingController {
         this.listener = listener;
     }
 
-    void update(int level, int scale, boolean charging, float cutoff) {
+    void update(int level, int scale, boolean charging, float cutoff, boolean gpsEnabled) {
         // Missing extras and invalid scales must not spuriously resume GPS.
         if (level < 0 || scale <= 0 || level > scale) return;
         batteryLow = !charging && (float) level / scale < cutoff;
-        boolean allowed = !batteryLow;
+        boolean allowed = !batteryLow && gpsEnabled;
         if (allowed == tracking) return;
         if (allowed) listener.startTracking();
         else listener.stopTracking();

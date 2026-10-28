@@ -160,7 +160,7 @@ public class GpsTrailerService extends Service {
 			//we stop self, the event would still be turned on otherwise.)
 			if (event == GTGEvent.ERROR_GPS_DISABLED) {
 				updateNotification(FLAG_GPS_ENABLED, false);
-				stopSelf();
+				// The provider broadcast pauses the session and permits recovery.
 				return true;
 			}
 			if (event == GTGEvent.ERROR_GPS_NO_PERMISSION) {
@@ -431,11 +431,18 @@ public class GpsTrailerService extends Service {
 
 			updateNotification(FLAG_COLLECT_ENABLED, true);
 
-			// Do not construct or start GPS until a valid battery sample permits it.
+			// Start GPS only when both the battery sample and provider state permit it.
 			batteryReceiver = new BroadcastReceiver() {
 
 				@Override
 				public void onReceive(Context context, Intent intent) {
+					if (LocationManager.PROVIDERS_CHANGED_ACTION.equals(intent.getAction())) {
+						// Provider broadcasts carry no battery sample; obtain the sticky one.
+						intent = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+						if (intent == null) return;
+					}
+					boolean gpsEnabled = ((LocationManager) getSystemService(LOCATION_SERVICE))
+							.isProviderEnabled(LocationManager.GPS_PROVIDER);
 					int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS,
 							BatteryManager.BATTERY_STATUS_UNKNOWN);
 					boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING
@@ -443,7 +450,8 @@ public class GpsTrailerService extends Service {
 					batteryTracking.update(
 							intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1),
 							intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1),
-							charging, GTG.prefs.minBatteryPerc);
+							charging, GTG.prefs.minBatteryPerc, gpsEnabled);
+					updateNotification(FLAG_GPS_ENABLED, gpsEnabled);
 					updateNotification(FLAG_BATTERY_LOW, batteryTracking.isBatteryLow());
 
 					//we wait until now to finish startup 
@@ -459,6 +467,7 @@ public class GpsTrailerService extends Service {
 
 			IntentFilter batteryLevelFilter = new IntentFilter(
 					Intent.ACTION_BATTERY_CHANGED);
+			batteryLevelFilter.addAction(LocationManager.PROVIDERS_CHANGED_ACTION);
 			registerReceiver(batteryReceiver, batteryLevelFilter);
 
 
@@ -583,7 +592,7 @@ public class GpsTrailerService extends Service {
 
 		if (GTG.service == this) GTG.service = null;
 
-		DebugLogFile.log("onDestroy called, restart finished");
+		DebugLogFile.log("onDestroy cleanup finished");
 	}
 
 	@Override
