@@ -1,11 +1,11 @@
 // Fail before compilation if the separately fetched release artifact is missing or changed.
-def tangramAar = rootProject.file('.dependencies/tangram-android-0.10.1.aar')
+def tangramAar = rootProject.file('.dependencies/tangram-android-0.10.1-16kb-r2.aar')
 if (!tangramAar.isFile()) {
     throw new GradleException('Run scripts/fetch-tangram.sh before building (see BUILDING.md).')
 }
 def tangramSha256 = java.security.MessageDigest.getInstance('SHA-256')
         .digest(tangramAar.bytes).encodeHex().toString()
-if (tangramSha256 != '88ef5803f006bb5e1d84409f615dddb034bbd7afe8b9e5681053b43725439c14') {
+if (tangramSha256 != 'a9037580d9284d89703ba6e038993ebe25fa5538aed1a0d672aa6c06cfb86516') {
     throw new GradleException('Tangram AAR checksum mismatch; remove it and run scripts/fetch-tangram.sh.')
 }
 
@@ -52,8 +52,8 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
-    // Official same-version release AAR; see scripts/fetch-tangram.sh and BUILDING.md.
-    implementation files(rootProject.file('.dependencies/tangram-android-0.10.1.aar'))
+    // Rebuilt upstream 0.10.1 JNI, unchanged Java API; see docs/native-dependency.md.
+    implementation files(rootProject.file('.dependencies/tangram-android-0.10.1-16kb-r2.aar'))
     // Local AARs have no POM, so retain the dependencies declared by upstream 0.10.1.
     implementation 'com.squareup.okhttp3:okhttp:3.12.0'
     implementation 'androidx.annotation:annotation:1.9.1'

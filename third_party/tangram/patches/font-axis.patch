@@ -1,0 +1,26 @@
+--- a/com/mapzen/tangram/FontFileParser.java
++++ b/com/mapzen/tangram/FontFileParser.java
+@@ -185 +185 @@
+-                                final String filename = parser.nextText();
++                                final String filename = readFontFilename(parser);
+@@ -224 +224 @@
+-                            final String filename = parser.nextText();
++                            final String filename = readFontFilename(parser);
+@@ -263,0 +264,17 @@
++    }
++
++    // Variable fonts can contain nested <axis> elements after the filename.
++    // Read only direct text, skip child metadata, and consume this font's end tag.
++    private String readFontFilename(@NonNull final XmlPullParser parser) throws XmlPullParserException, IOException {
++        parser.require(XmlPullParser.START_TAG, null, "font");
++        final StringBuilder filename = new StringBuilder();
++        while (parser.next() != XmlPullParser.END_TAG) {
++            if (parser.getEventType() == XmlPullParser.TEXT) {
++                filename.append(parser.getText());
++            } else if (parser.getEventType() == XmlPullParser.START_TAG) {
++                skip(parser);
++            } else if (parser.getEventType() == XmlPullParser.END_DOCUMENT) {
++                throw new XmlPullParserException("Unexpected end of font element", parser, null);
++            }
++        }
++        return filename.toString().trim();

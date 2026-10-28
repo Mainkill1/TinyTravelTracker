@@ -13,25 +13,23 @@ distribution checksum before running.
 
 `com.mapzen.tangram:tangram:0.10.1` was published to JCenter, as documented in
 [upstream's versioned Android README](https://github.com/tangrams/tangram-es/blob/0.10.1/platforms/android/README.md).
-It no longer resolves from the project's repositories. We use the **same version's
-official Android release asset**, without changing the renderer API:
+It no longer resolves from the project's repositories. We rebuild its native
+libraries from the exact upstream source with NDK r28c for 16 KB page support,
+retaining the renderer API/resources and original ABIs, and adding x86_64.
+The Java font reader has a source patch for current Android variable-font XML.
 
-- Release: https://github.com/tangrams/tangram-es/releases/tag/0.10.1
-- Tag commit: `3b0463a8bbbb3a3164593a93eeff5465d0b79360`
-- Asset: https://github.com/tangrams/tangram-es/releases/download/0.10.1/tangram-android-0.10.1.aar
-- SHA-256: `88ef5803f006bb5e1d84409f615dddb034bbd7afe8b9e5681053b43725439c14`
+- Source tag: `0.10.1`, commit `3b0463a8bbbb3a3164593a93eeff5465d0b79360`
+- Rebuilt release: https://github.com/Mainkill1/TinyTravelTracker/releases/tag/tangram-0.10.1-16kb-r2
+- Rebuilt AAR SHA-256: `a9037580d9284d89703ba6e038993ebe25fa5538aed1a0d672aa6c06cfb86516`
 
-The fetch script downloads over HTTPS into ignored `.dependencies/`, verifies
-SHA-256 before installing the file, and rejects a changed cached artifact.
-Gradle independently verifies the file before configuration. The checksum pins
-bytes obtained from the official release; it is not an upstream signature or a
-claim that the binary was independently rebuilt from source. If the upstream
-asset disappears, restore these exact bytes from a trusted local archive rather
-than substituting an unreviewed mirror.
+`scripts/fetch-tangram.sh` downloads the pinned rebuilt artifact into ignored
+`.dependencies/` and verifies its checksum. Gradle independently verifies it.
+See [native dependency instructions](docs/native-dependency.md) for exact source,
+licenses, reproducible build steps, ELF checks and runtime verification limits.
 
 A local AAR has no Maven transitive metadata. The two dependencies from
 [upstream's tagged build](https://github.com/tangrams/tangram-es/blob/0.10.1/platforms/android/tangram/build.gradle)
-are therefore explicit: OkHttp **3.12.0** and support-annotations **27.1.1**.
+are therefore explicit: OkHttp **3.12.0** and AndroidX annotations **1.9.1** (Jetifier translates the upstream API).
 Other existing direct dependency versions remain pinned. Google Maven,
 Maven Central, and JitPack (Nammu 1.2.0) are still network dependencies. This is a
 repeatable build with fixed tool/artifact versions, not a guarantee of byte-for-byte
