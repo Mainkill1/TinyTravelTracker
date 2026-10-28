@@ -13,20 +13,27 @@ public final class BackupDocumentStreams {
 
     /** Takes ownership of the provider stream; incomplete imports are never retained. */
     public static File stage(InputStream source, File cacheDirectory, String displayName) throws IOException {
+        return stage(source, cacheDirectory, displayName, new BackupCancellation());
+    }
+
+    static File stage(InputStream source, File cacheDirectory, String displayName, BackupCancellation cancellation) throws IOException {
         if (source == null) throw new IOException("Document provider returned no input stream");
         File staged = null;
         boolean complete = false;
         try {
             try (InputStream input = source) {
+                cancellation.register(input);
                 String suffix = displayName != null && displayName.toLowerCase(java.util.Locale.ROOT).endsWith(".zip") ? ".zip" : ".gpx";
                 staged = File.createTempFile("gpx-import-", suffix, cacheDirectory);
                 try (OutputStream output = new FileOutputStream(staged)) {
-                    copy(input, output);
+                    copy(input, output, cancellation);
                 }
             }
+            cancellation.check();
             complete = true;
             return staged;
         } finally {
+            cancellation.unregister(source);
             if (!complete && staged != null) staged.delete();
         }
     }
@@ -44,10 +51,6 @@ public final class BackupDocumentStreams {
         } finally {
             cancellation.unregister(destination);
         }
-    }
-
-    private static void copy(InputStream input, OutputStream output) throws IOException {
-        copy(input, output, new BackupCancellation());
     }
 
     private static void copy(InputStream input, OutputStream output, BackupCancellation cancellation) throws IOException {

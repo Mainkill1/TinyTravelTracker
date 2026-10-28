@@ -204,6 +204,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 	private FileInfo fileInfo;
     private File selectedBackup;
 	private ValidateAndRestoreGpxBackupTask restoreTask;
+    private Task selectionTask;
 	private boolean isPaused = true;
     private final RestoreCollectorRestart collectorRestart = new RestoreCollectorRestart();
 	
@@ -249,7 +250,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 	}
 
 	public void onRestoreButton(View view) {
-        if (selectedBackup == null) return;
+        if (selectedBackup == null || selectionTask != null) return;
         if (fileInfo != null) fileInfo.close();
         fileInfo = new FileInfo(selectedBackup);
 
@@ -340,6 +341,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 		if(restoreTask != null)
 			restoreTask.cancel();
         restoreTask = null;
+        if (selectionTask != null) selectionTask.cancel();
         releaseSelectedBackup();
 		super.finish();
 	}
@@ -351,6 +353,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 		if(restoreTask != null)
 			restoreTask.cancel();
         restoreTask = null;
+        if (selectionTask != null) selectionTask.cancel();
         releaseSelectedBackup();
 	}
 
@@ -362,6 +365,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
     }
 
     public void onFileBrowserButton(View v) {
+        if (selectionTask != null) return;
         startInternalActivityForResult(BackupDocuments.open(), REQUEST_BROWSE);
     }
 
@@ -370,23 +374,38 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQUEST_BROWSE) return;
         final Uri document = BackupDocuments.selected(resultCode, data);
-        if (document == null) return; // Keep the previous selection when the user cancels.
-        runLongTask(new Task() {
+        if (document == null || selectionTask != null) return; // Keep the previous selection when the user cancels.
+        restoreButton.setEnabled(false);
+        findViewById(R.id.fileBrowserButton).setEnabled(false);
+        runLongTask(selectionTask = new Task() {
             private File staged;
             private String name;
             private Exception failure;
+            private final BackupCancellation cancellation = new BackupCancellation();
+
+            @Override public void cancel() {
+                isCanceled = true;
+                cancellation.cancel();
+            }
 
             @Override public void doIt() {
                 try {
                     name = BackupDocuments.displayName(getContentResolver(), document);
-                    staged = BackupDocumentStreams.stage(getContentResolver().openInputStream(document), getCacheDir(), name);
+                    staged = BackupDocumentStreams.stage(getContentResolver().openInputStream(document), getCacheDir(), name, cancellation);
                 } catch (IOException | SecurityException e) {
                     failure = e;
                 }
             }
 
             @Override public void doAfterFinish() {
+                selectionTask = null;
                 if (isFinishing() || isDestroyed()) {
+                    if (staged != null) staged.delete();
+                    return;
+                }
+                findViewById(R.id.fileBrowserButton).setEnabled(true);
+                checkChosenFile();
+                if (cancellation.isCancelled()) {
                     if (staged != null) staged.delete();
                     return;
                 }
@@ -402,7 +421,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
                 filenameView.setText(name);
                 checkChosenFile();
             }
-        }, false, true, R.string.restore_backup_dialog_title, R.string.restore_dialog_reading_backup_file);
+        }, true, true, R.string.restore_backup_dialog_title, R.string.restore_dialog_reading_backup_file);
     }
 
 	public void onCancelButton(View v) {

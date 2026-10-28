@@ -257,6 +257,7 @@ public abstract class ProgressDialogActivity extends GTGFragmentActivity {
 		public MyProgressDialogFragment(ProgressDialogActivity activity, boolean isCancelable, boolean indeterminate, int titleId, int msgId) {
 			this.activity = activity;
 			this.isCancelable = isCancelable;
+            setCancelable(isCancelable);
 			this.indeterminate = indeterminate;
 			this.titleId = titleId;
 			this.msgId = msgId;
