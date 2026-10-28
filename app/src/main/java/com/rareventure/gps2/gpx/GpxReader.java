@@ -50,7 +50,7 @@ import org.joda.time.format.ISODateTimeFormat;
 import org.xml.sax.Attributes;
 import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
-import org.xml.sax.helpers.DefaultHandler;
+import org.xml.sax.ext.DefaultHandler2;
 
 import com.rareventure.android.Util;
 
@@ -59,10 +59,10 @@ import android.location.Location;
 /**
  * Imports GPX file to My Tracks.
  */
-public class GpxReader extends DefaultHandler {
+public class GpxReader extends DefaultHandler2 {
 
 	private static final DateTimeFormatter XML_DATE_TIME_FORMAT = ISODateTimeFormat
-			.dateTime();
+			.dateTimeParser();
 
 	// GPX tag names and attributes
 	private static final String TAG_ALTITUDE = "ele";
@@ -106,6 +106,9 @@ public class GpxReader extends DefaultHandler {
 	private int trackChildDepth;
 	private int numberOfTrackSegments;
 	private Locator locator;
+    private boolean rootSeen;
+    private int elementDepth;
+    private String gpxNamespace;
 	private double latitudeValue;
 	private double longitudeValue;
 	private double elevation;
@@ -120,11 +123,47 @@ public class GpxReader extends DefaultHandler {
 
 	public void doIt(InputStream inputStream)
 			throws ParserConfigurationException, SAXException, IOException {
-		SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
-		SAXParser saxParser = saxParserFactory.newSAXParser();
+        SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
+        saxParserFactory.setNamespaceAware(true);
+        SAXParser saxParser = saxParserFactory.newSAXParser();
+        // Android Expat supports this SAX property (including API 21); Xerces-only DTD features do not.
+        saxParser.getXMLReader().setProperty("http://xml.org/sax/properties/lexical-handler", this);
 
 		saxParser.parse(inputStream, this);
 	}
+
+    @Override public void startDTD(String name, String publicId, String systemId) throws SAXException {
+        throw new SAXException("GPX backups must not declare a DTD");
+    }
+
+    @Override
+    public org.xml.sax.InputSource resolveEntity(String publicId, String systemId) throws SAXException {
+        throw new SAXException("External entities are not allowed in GPX backups");
+    }
+
+    /** Read-only preflight; an empty replacement is rejected to protect existing recorded history. */
+    static void validateForRestore(InputStream input) throws ParserConfigurationException, SAXException, IOException {
+        validateForRestore(input, new Runnable() { @Override public void run() { } });
+    }
+
+    static void validateForRestore(InputStream input, final Runnable checkCancelled)
+            throws ParserConfigurationException, SAXException, IOException {
+        final int[] points = {0};
+        new GpxReader(new GpxReaderCallback() {
+            private long lastTime;
+            public void readGpx() { checkCancelled.run(); }
+            public void readTrk() { checkCancelled.run(); }
+            public void readTrkSeg() { checkCancelled.run(); }
+            public void readTrkPt(double lon, double lat, double altitude, long time, TimeZone zone) {
+                checkCancelled.run();
+                if (isValidLocation(lon, lat) && time > lastTime) {
+                    points[0]++;
+                    lastTime = time;
+                }
+            }
+        }).doIt(input);
+        if (points[0] == 0) throw new SAXException("Backup has no usable GPX track points; existing history was kept");
+    }
 
 	@Override
 	public void characters(char[] ch, int start, int length)
@@ -146,6 +185,23 @@ public class GpxReader extends DefaultHandler {
 	@Override
 	public void startElement(String uri, String localName, String name,
 			Attributes attributes) throws SAXException {
+        if (elementDepth++ == 0) {
+            String version = attributes.getValue("version");
+            boolean gpx10 = "http://www.topografix.com/GPX/1/0".equals(uri) && "1.0".equals(version);
+            boolean gpx11 = "http://www.topografix.com/GPX/1/1".equals(uri) && "1.1".equals(version);
+            if (!TAG_GPX.equals(localName) || (!gpx10 && !gpx11))
+                throw new SAXException(createErrorMessage("Expected a GPX 1.0 or 1.1 document root"));
+            rootSeen = true;
+            gpxNamespace = uri;
+            grc.readGpx();
+            return;
+        }
+        if (TAG_GPX.equals(localName))
+            throw new SAXException(createErrorMessage("A GPX document cannot contain a nested GPX root"));
+        if (!isSupportedNamespace(uri, localName)) {
+            if (isInTrackElement) trackChildDepth++;
+            return;
+        }
 		if (isInTrackElement) {
 			trackChildDepth++;
 			if (localName.equals(TAG_TRACK)) {
@@ -163,14 +219,18 @@ public class GpxReader extends DefaultHandler {
 			isInTrackElement = true;
 			trackChildDepth = 0;
 			onTrackElementStart();
-		} else if (localName.equals(TAG_GPX)) {
-			grc.readGpx();
 		}
 	}
 
 	@Override
 	public void endElement(String uri, String localName, String name)
 			throws SAXException {
+        elementDepth--;
+        if (!isSupportedNamespace(uri, localName)) {
+            if (isInTrackElement) trackChildDepth--;
+            content = null;
+            return;
+        }
 		if (!isInTrackElement) {
 			content = null;
 			return;
@@ -208,6 +268,15 @@ public class GpxReader extends DefaultHandler {
 		// reset element content
 		content = null;
 	}
+
+    private boolean isSupportedNamespace(String uri, String name) {
+        return gpxNamespace.equals(uri) || (TAG_NEW_TIME_ZONE.equals(name)
+                && "http://www.rareventure.com/xmlschemas/GpxExtensions/v1".equals(uri));
+    }
+
+    @Override public void endDocument() throws SAXException {
+        if (!rootSeen) throw new SAXException("GPX document has no root");
+    }
 
 	private void onNewTimeZoneElementEnd() {
 
@@ -277,6 +346,8 @@ public class GpxReader extends DefaultHandler {
 	 */
 	private void onTrackPointElementStart(Attributes attributes)
 			throws SAXException {
+        timeMs = 0;
+        elevation = 0;
 		String latitude = attributes.getValue(ATT_LAT);
 		String longitude = attributes.getValue(ATT_LON);
 

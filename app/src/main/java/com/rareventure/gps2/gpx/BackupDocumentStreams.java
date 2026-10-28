@@ -33,15 +33,32 @@ public final class BackupDocumentStreams {
 
     /** Publishes only a finalized local archive, and closes the provider stream. */
     public static void publish(File archive, OutputStream destination) throws IOException {
+        publish(archive, destination, new BackupCancellation());
+    }
+
+    static void publish(File archive, OutputStream destination, BackupCancellation cancellation) throws IOException {
         if (destination == null) throw new IOException("Document provider returned no output stream");
         try (OutputStream output = destination; InputStream input = new FileInputStream(archive)) {
-            copy(input, output);
+            cancellation.register(output);
+            copy(input, output, cancellation);
+        } finally {
+            cancellation.unregister(destination);
         }
     }
 
     private static void copy(InputStream input, OutputStream output) throws IOException {
+        copy(input, output, new BackupCancellation());
+    }
+
+    private static void copy(InputStream input, OutputStream output, BackupCancellation cancellation) throws IOException {
         byte[] buffer = new byte[65536];
-        int count;
-        while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+        while (true) {
+            cancellation.check();
+            int count = input.read(buffer);
+            if (count == -1) break;
+            cancellation.check();
+            output.write(buffer, 0, count);
+        }
+        cancellation.check();
     }
 }

@@ -38,6 +38,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.text.InputType;
 
 import com.rareventure.android.DbUtil;
 import com.rareventure.android.ProgressDialogActivity;
@@ -64,9 +65,7 @@ public class CreateGpxBackup extends ProgressDialogActivity {
 	private boolean isPause = true;
 	private String filePath;
     private static final int REQUEST_CREATE_DOCUMENT = 14;
-    private String pendingFilename;
-    private String pendingPassword;
-    private boolean pendingPasswordProtected;
+    private PendingBackupRequest pendingRequest;
 
 	@Override
 	public void doOnCreate(Bundle b) {
@@ -81,8 +80,17 @@ public class CreateGpxBackup extends ProgressDialogActivity {
         
         
         filenameView = (EditText)findViewById(R.id.filename);
+        enterPasswordView.setSaveEnabled(false);
+        reenterPasswordView.setSaveEnabled(false);
+        pendingRequest = PendingBackupRequest.restore(b);
 	}
 	
+    @Override
+    protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        if (pendingRequest != null) pendingRequest.save(state);
+    }
+
 	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
 	private Task backupTask;
 	protected static final int MAX_BUFFER_SIZE = 65536;
@@ -127,9 +135,16 @@ public class CreateGpxBackup extends ProgressDialogActivity {
 		super.finish();
 	}
 
+    @Override
+    protected void onDestroy() {
+        if (backupTask != null) backupTask.cancel();
+        super.onDestroy();
+    }
+
 
 	public void onCreateButton(final View v)
 	{
+        if (backupTask != null) return;
 		final boolean passwordProtected = passwordCheckBox.isChecked();
 		final String password = enterPasswordView.getText().toString(); 
 		
@@ -156,9 +171,7 @@ public class CreateGpxBackup extends ProgressDialogActivity {
 		
 		final String filename = localFilename;
 		
-        pendingFilename = filename;
-        pendingPassword = password;
-        pendingPasswordProtected = passwordProtected;
+        pendingRequest = new PendingBackupRequest(filename, passwordProtected, password);
         startInternalActivityForResult(BackupDocuments.create(filename), REQUEST_CREATE_DOCUMENT);
     }
 
@@ -166,18 +179,29 @@ public class CreateGpxBackup extends ProgressDialogActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQUEST_CREATE_DOCUMENT) return;
-        Uri destination = BackupDocuments.selected(resultCode, data);
-        String filename = pendingFilename;
-        String password = pendingPassword;
-        boolean protectedBackup = pendingPasswordProtected;
-        pendingFilename = null;
-        pendingPassword = null;
+        final Uri destination = BackupDocuments.selected(resultCode, data);
+        final PendingBackupRequest request = pendingRequest;
+        pendingRequest = null;
         if (destination == null) return;
-        if (filename == null) {
+        if (request == null) {
             showWriteError();
             return;
         }
-        createBackup(destination, filename, protectedBackup, password);
+        if (request.needsPassword()) {
+            // Never save a backup password in system state or silently export without encryption.
+            final EditText password = new EditText(this);
+            password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            password.setSaveEnabled(false);
+            new AlertDialog.Builder(this).setTitle(R.string.enter_backup_password)
+                    .setView(password).setNegativeButton(R.string.cancel, null)
+                    .setPositiveButton(R.string.details_ok, new OnClickListener() {
+                        @Override public void onClick(DialogInterface dialog, int which) {
+                            createBackup(destination, request.filename, true, password.getText().toString());
+                        }
+                    }).show();
+            return;
+        }
+        createBackup(destination, request.filename, request.passwordProtected, request.password);
     }
 
     private void createBackup(final Uri destination, final String filename,
@@ -190,11 +214,18 @@ public class CreateGpxBackup extends ProgressDialogActivity {
             return;
         }
         filePath = BackupDocuments.displayName(getContentResolver(), destination);
+        findViewById(R.id.createButton).setEnabled(false);
 
 		runLongTask(backupTask = new Task() {
 			
 			private volatile IOException failedException;
             private Thread zipThread;
+            private final BackupCancellation cancellation = new BackupCancellation();
+
+            @Override public void cancel() {
+                isCanceled = true;
+                cancellation.cancel();
+            }
 			
 			@Override
 			public void doIt() {
@@ -252,7 +283,7 @@ public class CreateGpxBackup extends ProgressDialogActivity {
 					gis.startSegment();
 
 					// while processing this query
-					while (c.moveToNext() && !isCanceled) {
+					while (c.moveToNext() && !cancellation.isCancelled()) {
 						if(failedException != null)
 						{
 							return;
@@ -316,13 +347,9 @@ public class CreateGpxBackup extends ProgressDialogActivity {
                     bis.blockUntilClosed();
                     try {
                         zipThread.join(); // Closing writes the ZIP central directory and AES authentication.
-                        if (!isCanceled && failedException == null)
-                            BackupDocumentStreams.publish(archive, getContentResolver().openOutputStream(destination, "wt"));
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         failedException = new IOException("Interrupted publishing backup", e);
-                    } catch (IOException | SecurityException e) {
-                        failedException = new IOException("Unable to publish backup", e);
                     }
 					
 				}
@@ -338,12 +365,18 @@ public class CreateGpxBackup extends ProgressDialogActivity {
                     }
 					DbUtil.closeCursors(c);
 					
-					GTG.cacheCreatorLock.unregisterReadingThread();
-					
-					isShutdown = true;
-				}
-				
-			}
+                    GTG.cacheCreatorLock.unregisterReadingThread();
+                }
+                // A cloud provider may block. Never hold database/cache locks while publishing.
+                if (!cancellation.isCancelled() && failedException == null) {
+                    try {
+                        BackupDocumentStreams.publish(archive,
+                                getContentResolver().openOutputStream(destination, "wt"), cancellation);
+                    } catch (IOException | SecurityException e) {
+                        failedException = new IOException("Unable to publish backup", e);
+                    }
+                }
+            }
 	
 			private boolean createEncryptedZipOutputThread(String filePath,
 					final String zipEntryName, final OutputStreamToInputStreamPipe bis,
@@ -433,28 +466,23 @@ public class CreateGpxBackup extends ProgressDialogActivity {
 			public void doAfterFinish() {
                 archive.delete();
                 backupTask = null;
+                if (isFinishing() || isDestroyed()) return;
+                findViewById(R.id.createButton).setEnabled(true);
+                if (cancellation.isCancelled()) {
+                    if (isPause) return;
+                    new AlertDialog.Builder(CreateGpxBackup.this)
+                            .setCancelable(false).setTitle(R.string.backup_has_been_canceled)
+                            .setNeutralButton(R.string.details_ok, null).show();
+                    return;
+                }
                 if (failedException != null) {
                     showWriteError();
                     return;
                 }
-				if(isCanceled)
-				{
-					if(isPause)
-						return;
-					
-					new AlertDialog.Builder(CreateGpxBackup.this)
-	                .setCancelable(false)
-	                .setTitle(R.string.backup_has_been_canceled)
-	                .setNeutralButton(R.string.details_ok, null)
-	                .show();
-					return;
-				}
-				else
-				{
-					isShowBackupFinishedOnResume=true;
-					if(!isPause)
-						showCreateBackupFinished();
-				}
+                if (!isCanceled) {
+                    isShowBackupFinishedOnResume = true;
+                    if (!isPause) showCreateBackupFinished();
+                }
 			}
 
 		}, true, false, R.string.create_gpx_backup_progress_title, R.string.create_gpx_backup_progress_msg);

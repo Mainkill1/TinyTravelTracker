@@ -25,7 +25,6 @@ import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
 import android.os.Bundle;
 import android.net.Uri;
-import androidx.core.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -36,6 +35,7 @@ import com.rareventure.android.DbUtil;
 import com.rareventure.android.ProgressDialogActivity;
 import com.rareventure.android.database.DbDatastoreAccessor;
 import com.rareventure.gps2.GTG;
+import com.rareventure.gps2.CollectorServicePolicy;
 import com.rareventure.gps2.GpsTrailerDb;
 import com.rareventure.gps2.GpsTrailerDbProvider;
 import com.rareventure.gps2.GpsTrailerService;
@@ -205,6 +205,7 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
     private File selectedBackup;
 	private ValidateAndRestoreGpxBackupTask restoreTask;
 	private boolean isPaused = true;
+    private final RestoreCollectorRestart collectorRestart = new RestoreCollectorRestart();
 	
 	@Override
 	public void doOnCreate(Bundle b) {
@@ -317,7 +318,8 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 	@Override
 	public void doOnResume() {
 		super.doOnResume();
-		isPaused = false;
+        isPaused = false;
+        restartCollectorWhenVisible();
 		showRestoreCompleteMessage();		
 		
 	}
@@ -487,7 +489,17 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 			
 			tl.advanceToNextTask(R.string.restore_dialog_reading_backup_file);
 		
-			try {
+            try {
+                // Parse the entire staged backup before stopping collection or replacing any tables.
+                try (InputStream validation = fileInfo.getBufferedInputStream(this, tl)) {
+                    if (validation == null || isCanceled) return;
+                    GpxReader.validateForRestore(validation, new Runnable() {
+                        @Override public void run() {
+                            if (isCanceled) throw new CanceledException();
+                        }
+                    });
+                }
+                if (isCanceled) return;
 				InputStream bis = fileInfo.getBufferedInputStream(this, tl);
 				if(bis == null) //if canceled
 					return;
@@ -673,10 +685,9 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
             restoreTask = null;
 			GTG.setIsInRestore(false);
 			
-			//restart the gps service now that we're no longer restoring
-			ContextCompat.startForegroundService(RestoreGpxBackup.this,new Intent(RestoreGpxBackup.this,
-	                GpsTrailerService.class));
-	        
+            collectorRestart.completed();
+            restartCollectorWhenVisible();
+
 			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 			
 			if(isCanceled)
@@ -701,6 +712,15 @@ public class RestoreGpxBackup extends ProgressDialogActivity {
 
 	}
 	
+    private void restartCollectorWhenVisible() {
+        collectorRestart.startIfResumed(isPaused || isFinishing() || isDestroyed(),
+                new RestoreCollectorRestart.Starter() {
+                    @Override public boolean start() {
+                        return CollectorServicePolicy.startFromActivity(RestoreGpxBackup.this);
+                    }
+                });
+    }
+
 	private void showRestoreCompleteMessage() {
 		
 		if(!isRestoreCompletedAndNeedsMessage)

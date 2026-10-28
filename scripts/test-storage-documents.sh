@@ -6,6 +6,14 @@ trap 'rm -rf "$classes"' EXIT
 mapfile -t fixtures < <(rg --files tests/storage/stubs -g '*.java')
 sources=(
   "${fixtures[@]}"
+  tests/storage/GpxValidationTest.java
+  app/src/main/java/com/rareventure/gps2/gpx/GpxReader.java
+  tests/storage/RestoreCollectorRestartTest.java
+  app/src/main/java/com/rareventure/gps2/gpx/RestoreCollectorRestart.java
+  tests/storage/BackupCancellationTest.java
+  app/src/main/java/com/rareventure/gps2/gpx/BackupCancellation.java
+  tests/storage/PendingBackupRequestTest.java
+  app/src/main/java/com/rareventure/gps2/gpx/PendingBackupRequest.java
   tests/storage/BackupDocumentStreamsTest.java
   tests/storage/BackupDocumentsTest.java
   tests/storage/BackupArchiveRoundTripTest.java
@@ -13,6 +21,10 @@ sources=(
   app/src/main/java/com/rareventure/gps2/gpx/BackupDocuments.java
 )
 javac --release 8 -Xlint:-options -sourcepath app/src/main/java -d "$classes" "${sources[@]}"
-java -cp "$classes" com.rareventure.gps2.gpx.BackupDocumentStreamsTest
-java -cp "$classes" com.rareventure.gps2.gpx.BackupDocumentsTest
-java -cp "$classes" com.rareventure.gps2.gpx.BackupArchiveRoundTripTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.BackupDocumentStreamsTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.BackupDocumentsTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.BackupArchiveRoundTripTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.PendingBackupRequestTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.BackupCancellationTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.RestoreCollectorRestartTest
+java -cp "$classes:app/src/main/resources" com.rareventure.gps2.gpx.GpxValidationTest

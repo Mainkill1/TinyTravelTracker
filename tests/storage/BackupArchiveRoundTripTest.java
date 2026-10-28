@@ -12,7 +12,7 @@ import de.idyl.winzipaes.impl.*;
 public final class BackupArchiveRoundTripTest {
     public static void main(String[] args) throws Exception {
         File directory = Files.createTempDirectory("ttt-archive").toFile();
-        byte[] gpx = "<?xml version=\"1.0\"?><gpx><trk><name>旅行</name><trkseg><trkpt lat=\"37.1\" lon=\"-122.2\"/></trkseg></trk></gpx>".getBytes(StandardCharsets.UTF_8);
+        byte[] gpx = "<?xml version=\"1.0\"?><gpx xmlns=\"http://www.topografix.com/GPX/1/1\" version=\"1.1\"><trk><name>旅行</name><trkseg><trkpt lat=\"37.1\" lon=\"-122.2\"><time>2020-01-02T03:04:05.000Z</time></trkpt></trkseg></trk></gpx>".getBytes(StandardCharsets.UTF_8);
         try {
             for (boolean encrypted : new boolean[]{false, true}) {
                 File archive = new File(directory, "export.zip");
@@ -52,10 +52,24 @@ public final class BackupArchiveRoundTripTest {
                     byte[] buffer = new byte[71]; int count;
                     while ((count = input.read(buffer)) != -1) extracted.write(buffer, 0, count);
                 }
+                GpxReader.validateForRestore(new ByteArrayInputStream(extracted.toByteArray()));
                 if (reader != null) reader.close();
                 if (!Arrays.equals(gpx, extracted.toByteArray())) throw new AssertionError("GPX contents changed across " + (encrypted ? "encrypted" : "plain") + " document round trip");
                 archive.delete(); imported.delete();
             }
+            // A .gpx entry name is insufficient: a ZIP can carry unrelated well-formed XML.
+            ByteArrayOutputStream misleadingArchive = new ByteArrayOutputStream();
+            try (ZipOutputStream writer = new ZipOutputStream(misleadingArchive)) {
+                writer.putNextEntry(new ZipEntry("misleading.gpx"));
+                writer.write("<notes/>".getBytes(StandardCharsets.UTF_8));
+            }
+            File misleading = BackupDocumentStreams.stage(new ByteArrayInputStream(misleadingArchive.toByteArray()), directory, "not-gpx.zip");
+            try (ZipInputStream input = new ZipInputStream(new FileInputStream(misleading))) {
+                input.getNextEntry();
+                try { GpxReader.validateForRestore(input); throw new AssertionError("Non-GPX ZIP entry accepted for destructive restore"); }
+                catch (org.xml.sax.SAXException expected) { }
+            }
+            misleading.delete();
             System.out.println("BackupArchiveRoundTripTest: plain and AES encrypted GPX archives passed");
         } finally { for (File file : directory.listFiles()) file.delete(); directory.delete(); }
     }
